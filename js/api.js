@@ -1,8 +1,8 @@
 class XtreamAPI {
     constructor() {
-        this.serverUrl = '';
-        this.username = '';
-        this.password = '';
+        this.serverUrl = 'http://telefunplay.xyz';
+        this.username = 'TurboBrasil@2026';
+        this.password = '@27101992';
         this.auth = '';
         this.userData = null;
         this.cache = new Map();
@@ -18,7 +18,7 @@ class XtreamAPI {
 
     getApiUrl(type, params = {}) {
         const base = `${this.serverUrl}/player_api.php`;
-        const authParams = `username=${this.username}&password=${this.password}`;
+        const authParams = `username=${encodeURIComponent(this.username)}&password=${encodeURIComponent(this.password)}`;
         let url = `${base}?${authParams}`;
         
         if (type === 'live') url += '&action=get_live_streams';
@@ -41,17 +41,17 @@ class XtreamAPI {
 
     getStreamUrl(type, id) {
         if (type === 'live') {
-            return `${this.serverUrl}/live/${this.username}/${this.password}/${id}.m3u8`;
+            return `${this.serverUrl}/live/${encodeURIComponent(this.username)}/${encodeURIComponent(this.password)}/${id}.m3u8`;
         } else if (type === 'movie') {
-            return `${this.serverUrl}/movie/${this.username}/${this.password}/${id}.m3u8`;
+            return `${this.serverUrl}/movie/${encodeURIComponent(this.username)}/${encodeURIComponent(this.password)}/${id}.m3u8`;
         } else if (type === 'series') {
-            return `${this.serverUrl}/series/${this.username}/${this.password}/${id}.m3u8`;
+            return `${this.serverUrl}/series/${encodeURIComponent(this.username)}/${encodeURIComponent(this.password)}/${id}.m3u8`;
         }
         return '';
     }
 
     getChannelIcon(streamId) {
-        return `${this.serverUrl}/player_api.php?username=${this.username}&password=${this.password}&type=get_image&stream_icon=${streamId}`;
+        return `${this.serverUrl}/player_api.php?username=${encodeURIComponent(this.username)}&password=${encodeURIComponent(this.password)}&type=get_image&stream_icon=${streamId}`;
     }
 
     async fetch(url) {
@@ -160,7 +160,7 @@ class XtreamAPI {
         return Promise.all([
             searchIn('live', 'TV Ao Vivo'),
             searchIn('vod', 'Filme'),
-            searchIn('series', 'Série')
+            searchIn('series', 'Serie')
         ]).then(() => results);
     }
 }

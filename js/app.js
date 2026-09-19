@@ -54,30 +54,26 @@ document.addEventListener('DOMContentLoaded', () => {
     setInterval(updateClock, 1000);
     updateClock();
 
-    function enterApp() {
+    async function enterApp() {
         loginScreen.classList.remove('active');
         mainApp.classList.add('active');
+        showLoading('Conectando ao servidor...');
+        try {
+            const success = await api.authenticate();
+            if (success && api.userData) {
+                userDisplay.textContent = api.userData.username || 'TurboBrasil';
+                showLoading('Carregando conteudo...');
+                await loadInitialData();
+            } else {
+                showError('Falha na autenticacao');
+            }
+        } catch (err) {
+            showError('Erro: ' + err.message);
+        }
+        hideLoading();
     }
 
-    btnEnter.addEventListener('click', async () => {
-        const saved = getSavedCredentials();
-        if (saved) {
-            showLoading('Conectando ao servidor...');
-            api.setCredentials(saved.server, saved.user, saved.pass);
-            try {
-                const success = await api.authenticate();
-                if (success && api.userData) {
-                    userDisplay.textContent = api.userData.username || saved.user;
-                    await loadInitialData();
-                    hideLoading();
-                    enterApp();
-                    return;
-                }
-            } catch (e) {}
-            hideLoading();
-        }
-        enterApp();
-    });
+    btnEnter.addEventListener('click', () => enterApp());
 
     loginForm.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -85,32 +81,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const user = document.getElementById('username').value.trim();
         const pass = document.getElementById('password').value.trim();
         if (!server || !user || !pass) { showError('Preencha todos os campos'); return; }
-
-        btnLogin.disabled = true;
-        btnLogin.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Conectando...';
-        showLoading('Conectando ao servidor...');
         api.setCredentials(server, user, pass);
-
-        try {
-            const success = await api.authenticate();
-            if (success && api.userData) {
-                saveCredentials(server, user, pass);
-                loginScreen.classList.remove('active');
-                mainApp.classList.add('active');
-                userDisplay.textContent = api.userData.username || user;
-                showLoading('Carregando conteudo...');
-                await loadInitialData();
-                hideLoading();
-            } else {
-                hideLoading();
-                showError('Credenciais invalidas ou servidor inacessivel');
-            }
-        } catch (err) {
-            hideLoading();
-            showError('Erro ao conectar: ' + err.message);
-        }
-        btnLogin.disabled = false;
-        btnLogin.innerHTML = '<i class="fas fa-save"></i> Salvar Configuracao';
+        enterApp();
     });
 
     btnLogout.addEventListener('click', () => {
@@ -164,22 +136,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (e) { console.error('Search error:', e); }
         hideLoading();
-    }
-
-    function saveCredentials(server, user, pass) {
-        try {
-            localStorage.setItem('unitv_server', server);
-            localStorage.setItem('unitv_user', user);
-            localStorage.setItem('unitv_pass', pass);
-        } catch (e) {}
-    }
-
-    function getSavedCredentials() {
-        const server = localStorage.getItem('unitv_server');
-        const user = localStorage.getItem('unitv_user');
-        const pass = localStorage.getItem('unitv_pass');
-        if (server && user && pass) return { server, user, pass };
-        return null;
     }
 
     async function loadInitialData() {
@@ -412,10 +368,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    const saved = getSavedCredentials();
-    if (saved) {
-        document.getElementById('server-url').value = saved.server;
-        document.getElementById('username').value = saved.user;
-        document.getElementById('password').value = saved.pass;
-    }
+    // Auto-enter com credenciais do APK
+    enterApp();
 });
