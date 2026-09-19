@@ -13,31 +13,41 @@
 </head>
 <body>
     <div id="app">
-        <!-- Login Screen -->
+        <!-- Splash Screen (auto-bypass like the APK) -->
         <div id="login-screen" class="screen active">
-            <div class="login-container">
+            <div class="login-container splash-mode">
                 <div class="login-logo">
-                    <img src="assets/icons/logo.png" alt="UniTV" class="logo-img">
+                    <img src="assets/icons/logo.png" alt="UniTV" class="logo-img pulse">
                     <h1 class="logo-text">UniTV</h1>
+                    <p class="splash-subtitle">Player IPTV</p>
                 </div>
-                <form id="login-form" class="login-form">
-                    <div class="input-group">
-                        <i class="fas fa-server"></i>
-                        <input type="text" id="server-url" placeholder="URL do Servidor" required>
-                    </div>
-                    <div class="input-group">
-                        <i class="fas fa-user"></i>
-                        <input type="text" id="username" placeholder="Usuário" required>
-                    </div>
-                    <div class="input-group">
-                        <i class="fas fa-lock"></i>
-                        <input type="password" id="password" placeholder="Senha" required>
-                    </div>
-                    <button type="submit" class="btn-login" id="btn-login">
-                        <i class="fas fa-sign-in-alt"></i> Entrar
-                    </button>
-                    <div id="login-error" class="error-msg hidden"></div>
-                </form>
+                <div id="splash-status" class="splash-status">
+                    <i class="fas fa-check-circle" style="color:var(--success)"></i> Acesso liberado
+                </div>
+                <button type="button" class="btn-login" id="btn-enter" style="margin-top:20px">
+                    <i class="fas fa-play"></i> Entrar
+                </button>
+                <details style="margin-top:20px;width:100%">
+                    <summary style="color:var(--text-muted);cursor:pointer;font-size:13px">Configurar servidor</summary>
+                    <form id="login-form" class="login-form" style="margin-top:12px">
+                        <div class="input-group">
+                            <i class="fas fa-server"></i>
+                            <input type="text" id="server-url" placeholder="URL do Servidor Xtream">
+                        </div>
+                        <div class="input-group">
+                            <i class="fas fa-user"></i>
+                            <input type="text" id="username" placeholder="Usuario">
+                        </div>
+                        <div class="input-group">
+                            <i class="fas fa-lock"></i>
+                            <input type="password" id="password" placeholder="Senha">
+                        </div>
+                        <button type="submit" class="btn-login" id="btn-login" style="background:var(--bg-card);border:1px solid var(--border-color)">
+                            <i class="fas fa-save"></i> Salvar Configuracao
+                        </button>
+                        <div id="login-error" class="error-msg hidden"></div>
+                    </form>
+                </details>
             </div>
         </div>
 

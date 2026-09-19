@@ -148,6 +148,44 @@ html, body {
     margin-top: 8px;
 }
 
+.splash-mode {
+    text-align: center;
+    padding: 40px;
+}
+
+.splash-subtitle {
+    color: var(--text-muted);
+    font-size: 14px;
+    margin-top: 4px;
+}
+
+.splash-status {
+    margin-top: 24px;
+    padding: 12px 20px;
+    background: rgba(40, 167, 69, 0.1);
+    border: 1px solid rgba(40, 167, 69, 0.3);
+    border-radius: 8px;
+    font-size: 14px;
+    color: var(--success);
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
+
+.logo-img.pulse {
+    animation: pulse 2s infinite;
+}
+
+details summary {
+    list-style: none;
+}
+
+details summary::-webkit-details-marker {
+    display: none;
+}
+
 /* ========== SIDEBAR ========== */
 .sidebar {
     width: var(--sidebar-width);
