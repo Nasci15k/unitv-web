@@ -7,6 +7,7 @@ class XtreamAPI {
         this.userData = null;
         this.cache = new Map();
         this.cacheTime = 5 * 60 * 1000;
+        this.useProxy = true;
     }
 
     setCredentials(server, user, pass) {
@@ -17,7 +18,7 @@ class XtreamAPI {
     }
 
     getApiUrl(type, params = {}) {
-        const base = `${this.serverUrl}/player_api.php`;
+        const base = `/api/player_api.php`;
         const authParams = `username=${encodeURIComponent(this.username)}&password=${encodeURIComponent(this.password)}`;
         let url = `${base}?${authParams}`;
         
@@ -40,18 +41,12 @@ class XtreamAPI {
     }
 
     getStreamUrl(type, id) {
-        if (type === 'live') {
-            return `${this.serverUrl}/live/${encodeURIComponent(this.username)}/${encodeURIComponent(this.password)}/${id}.m3u8`;
-        } else if (type === 'movie') {
-            return `${this.serverUrl}/movie/${encodeURIComponent(this.username)}/${encodeURIComponent(this.password)}/${id}.m3u8`;
-        } else if (type === 'series') {
-            return `${this.serverUrl}/series/${encodeURIComponent(this.username)}/${encodeURIComponent(this.password)}/${id}.m3u8`;
-        }
-        return '';
+        const prefix = type === 'live' ? 'live' : type === 'movie' ? 'movie' : 'series';
+        return `/stream/${prefix}/${encodeURIComponent(this.username)}/${encodeURIComponent(this.password)}/${id}.m3u8`;
     }
 
     getChannelIcon(streamId) {
-        return `${this.serverUrl}/player_api.php?username=${encodeURIComponent(this.username)}&password=${encodeURIComponent(this.password)}&type=get_image&stream_icon=${streamId}`;
+        return `/api/player_api.php?username=${encodeURIComponent(this.username)}&password=${encodeURIComponent(this.password)}&type=get_image&stream_icon=${streamId}`;
     }
 
     async fetch(url) {
@@ -64,9 +59,7 @@ class XtreamAPI {
 
         try {
             const response = await window.fetch(url, {
-                headers: {
-                    'Accept': 'application/json'
-                }
+                headers: { 'Accept': 'application/json' }
             });
             
             if (!response.ok) throw new Error(`HTTP ${response.status}`);

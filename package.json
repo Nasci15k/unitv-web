@@ -1,0 +1,12 @@
+{
+  "name": "unitv-web",
+  "version": "1.0.0",
+  "description": "UniTV IPTV Player - Web Clone",
+  "main": "proxy.js",
+  "scripts": {
+    "start": "node proxy.js",
+    "proxy": "node proxy.js"
+  },
+  "keywords": ["iptv", "player", "xtream"],
+  "license": "MIT"
+}
