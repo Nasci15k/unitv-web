@@ -227,21 +227,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const year = featured.year || '';
         const isLive = featured.stream_type === 'live';
 
-        container.innerHTML = `
-            <div class="hero-banner">
-                <div class="hero-bg" style="background-image:url('${icon}')"></div>
-                <div class="hero-content">
-                    <div class="hero-badge">${isLive ? 'AO VIVO' : (featured.series_id ? 'SERIE' : 'FILME')}</div>
-                    <h2>${escHtml(title)}</h2>
-                    ${rating || year ? '<div style="display:flex;gap:12px;margin-bottom:8px">' :
-                    `${year ? '<span style="color:rgba(255,255,255,0.6);font-size:13px"><i class="fas fa-calendar"></i> ${year}</span>' : ''}
-                    ${rating ? '<span style="color:var(--warning);font-size:13px"><i class="fas fa-star"></i> ${rating}</span>' : ''}` : ''}
-                </div>
-                <div class="hero-actions">
-                    <button class="btn-hero primary"><i class="fas fa-play"></i> Assistir</button>
-                </div>
-            </div>
-        `;
+        let metaHtml = '';
+        if (year) metaHtml += '<span style="color:rgba(255,255,255,0.6);font-size:13px"><i class="fas fa-calendar"></i> ' + escHtml(year) + '</span>';
+        if (rating) metaHtml += '<span style="color:var(--warning);font-size:13px"><i class="fas fa-star"></i> ' + escHtml(String(rating)) + '</span>';
+
+        container.innerHTML = '<div class="hero-banner">' +
+            '<div class="hero-bg" style="background-image:url(\'' + icon + '\')"></div>' +
+            '<div class="hero-content">' +
+            '<div class="hero-badge">' + (isLive ? 'AO VIVO' : (featured.series_id ? 'SERIE' : 'FILME')) + '</div>' +
+            '<h2>' + escHtml(title) + '</h2>' +
+            (metaHtml ? '<div style="display:flex;gap:12px;margin-bottom:8px">' + metaHtml + '</div>' : '') +
+            '</div>' +
+            '<div class="hero-actions">' +
+            '<button class="btn-hero primary"><i class="fas fa-play"></i> Assistir</button>' +
+            '</div>' +
+            '</div>';
         container.querySelector('.btn-hero').addEventListener('click', () => {
             const type = isLive ? 'live' : (featured.series_id ? 'series' : 'movie');
             if (type === 'live') player.play(api.getStreamUrl('live', featured.stream_id), title, 'live');
@@ -626,5 +626,5 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // --- Auto enter ---
-    enterApp();
+    // enterApp(); // REMOVED - user clicks button
 });
