@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UniTV - Player IPTV</title>
+    <link rel="icon" type="image/png" href="assets/icons/favicon.png">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css">
+    <script src="https://cdn.plyr.io/3.7.8/plyr.js"></script>
+</head>
+<body>
+    <div id="app">
+        <!-- Login Screen -->
+        <div id="login-screen" class="screen active">
+            <div class="login-container">
+                <div class="login-logo">
+                    <img src="assets/icons/logo.png" alt="UniTV" class="logo-img">
+                    <h1 class="logo-text">UniTV</h1>
+                </div>
+                <form id="login-form" class="login-form">
+                    <div class="input-group">
+                        <i class="fas fa-server"></i>
+                        <input type="text" id="server-url" placeholder="URL do Servidor" required>
+                    </div>
+                    <div class="input-group">
+                        <i class="fas fa-user"></i>
+                        <input type="text" id="username" placeholder="Usuário" required>
+                    </div>
+                    <div class="input-group">
+                        <i class="fas fa-lock"></i>
+                        <input type="password" id="password" placeholder="Senha" required>
+                    </div>
+                    <button type="submit" class="btn-login" id="btn-login">
+                        <i class="fas fa-sign-in-alt"></i> Entrar
+                    </button>
+                    <div id="login-error" class="error-msg hidden"></div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Main App -->
+        <div id="main-app" class="screen">
+            <!-- Sidebar -->
+            <nav id="sidebar" class="sidebar">
+                <div class="sidebar-header">
+                    <img src="assets/icons/logo.png" alt="UniTV" class="sidebar-logo">
+                </div>
+                <ul class="nav-menu">
+                    <li class="nav-item active" data-section="home">
+                        <i class="fas fa-home"></i>
+                        <span>Início</span>
+                    </li>
+                    <li class="nav-item" data-section="live">
+                        <i class="fas fa-tv"></i>
+                        <span>TV Ao Vivo</span>
+                    </li>
+                    <li class="nav-item" data-section="movies">
+                        <i class="fas fa-film"></i>
+                        <span>Filmes</span>
+                    </li>
+                    <li class="nav-item" data-section="series">
+                        <i class="fas fa-film"></i>
+                        <span>Séries</span>
+                    </li>
+                    <li class="nav-item" data-section="search">
+                        <i class="fas fa-search"></i>
+                        <span>Buscar</span>
+                    </li>
+                </ul>
+                <div class="sidebar-footer">
+                    <div class="user-info">
+                        <img src="assets/icons/profile.png" alt="User" class="user-avatar">
+                        <span id="user-display">Usuário</span>
+                    </div>
+                    <button id="btn-logout" class="btn-logout" title="Sair">
+                        <i class="fas fa-sign-out-alt"></i>
+                    </button>
+                </div>
+            </nav>
+
+            <!-- Content Area -->
+            <main id="content" class="content">
+                <!-- Top Bar -->
+                <header class="top-bar">
+                    <button id="btn-menu" class="btn-menu">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                    <div class="search-bar" id="search-container">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="search-input" placeholder="Buscar filmes, séries, canais...">
+                        <button id="btn-search-go" class="btn-search-go">
+                            <i class="fas fa-arrow-right"></i>
+                        </button>
+                    </div>
+                    <div class="top-bar-right">
+                        <span id="current-time" class="current-time"></span>
+                    </div>
+                </header>
+
+                <!-- Home Section -->
+                <section id="section-home" class="section active">
+                    <div class="section-header">
+                        <h2>Destaques</h2>
+                    </div>
+                    <div id="highlights-slider" class="highlights-slider"></div>
+                    
+                    <div class="section-header">
+                        <h2>Categorias</h2>
+                    </div>
+                    <div class="categories-grid" id="home-categories"></div>
+
+                    <div class="section-header">
+                        <h2>Canais em Alta</h2>
+                    </div>
+                    <div id="popular-channels" class="horizontal-scroll"></div>
+                </section>
+
+                <!-- Live TV Section -->
+                <section id="section-live" class="section">
+                    <div class="live-layout">
+                        <div class="live-sidebar">
+                            <div class="category-filter">
+                                <button class="category-btn active" data-category="all">Todos</button>
+                                <div id="live-categories" class="category-list"></div>
+                            </div>
+                        </div>
+                        <div class="live-main">
+                            <div id="channel-list" class="channel-grid"></div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Movies Section -->
+                <section id="section-movies" class="section">
+                    <div class="section-header">
+                        <h2>Filmes</h2>
+                        <div class="filter-controls">
+                            <button class="filter-btn active" data-filter="all">Todos</button>
+                            <div id="movie-categories-filter"></div>
+                        </div>
+                    </div>
+                    <div id="movies-grid" class="content-grid"></div>
+                    <div id="movies-pagination" class="pagination"></div>
+                </section>
+
+                <!-- Series Section -->
+                <section id="section-series" class="section">
+                    <div class="section-header">
+                        <h2>Séries</h2>
+                    </div>
+                    <div id="series-grid" class="content-grid"></div>
+                </section>
+
+                <!-- Search Section -->
+                <section id="section-search" class="section">
+                    <div class="section-header">
+                        <h2>Resultados da Busca</h2>
+                    </div>
+                    <div id="search-results" class="content-grid"></div>
+                </section>
+            </main>
+        </div>
+
+        <!-- Video Player Modal -->
+        <div id="player-modal" class="modal hidden">
+            <div class="modal-content player-modal-content">
+                <div class="player-header">
+                    <h3 id="player-title">Reproduzindo</h3>
+                    <button id="btn-close-player" class="btn-close">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="player-wrapper">
+                    <video id="video-player" playsinline></video>
+                </div>
+                <div class="player-controls">
+                    <div id="epg-bar" class="epg-bar hidden">
+                        <div class="epg-progress"></div>
+                        <span class="epg-info"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Movie/Series Detail Modal -->
+        <div id="detail-modal" class="modal hidden">
+            <div class="modal-content detail-modal-content">
+                <button id="btn-close-detail" class="btn-close">
+                    <i class="fas fa-times"></i>
+                </button>
+                <div id="detail-content" class="detail-content"></div>
+            </div>
+        </div>
+
+        <!-- Loading Overlay -->
+        <div id="loading-overlay" class="loading-overlay hidden">
+            <div class="loading-spinner">
+                <img src="assets/images/loading_0.png" alt="Carregando" id="loading-img" class="loading-img">
+                <p id="loading-text">Carregando...</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/player.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
