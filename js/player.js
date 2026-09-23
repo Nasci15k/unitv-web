@@ -424,6 +424,15 @@ class VideoPlayer {
 
             this.mpegtsPlayer.on(mpegts.Events.ERROR, (errType, errDetail, errInfo) => {
                 console.warn('[MPEGTS]', errType, errDetail);
+                const msg = JSON.stringify(errInfo || {});
+                const hevcUnsupported = /hvc1|hev1|MediaMSEError|addSourceBuffer/i.test(msg + errDetail) &&
+                    !this._mpegtsHevcNotified;
+                if (hevcUnsupported && /hvc1|hev1|MediaMSEError/i.test(msg + errDetail)) {
+                    this._mpegtsHevcNotified = true;
+                    this.destroyMpegts();
+                    this.showErrorMessage('Video HEVC (H.265) nao suportado por este navegador. Tente outro canal ou qualidade.');
+                    return;
+                }
                 if (this._inMkvFallback) {
                     this.destroyMpegts();
                     this.showMkvError();
@@ -515,9 +524,15 @@ class VideoPlayer {
                         break;
                     case Hls.ErrorTypes.MEDIA_ERROR:
                         if (data.details === 'bufferAddCodecError') {
-                            console.log('[HLS] Codec not supported by MSE, trying direct playback');
+                            const codecInfo = (data.error && data.error.codec) || '';
+                            const hevc = /hvc|hev/i.test(codecInfo) || /hvc|hev/i.test(JSON.stringify(data));
+                            console.log('[HLS] Codec not supported by MSE:', codecInfo || 'unknown');
                             this.hls.destroy(); this.hls = null;
-                            this.playDirect(url);
+                            if (hevc) {
+                                this.showErrorMessage('Video HEVC (H.265) nao suportado por este navegador. Tente outro canal ou qualidade.');
+                            } else {
+                                this.playDirect(url);
+                            }
                             return;
                         }
                         if (this.mediaRecoverCount < 2) {
@@ -609,7 +624,7 @@ class VideoPlayer {
                 this.videoEl.load();
                 this.recoverVod(url);
             }
-        }, 14000);
+        }, 25000);
 
         this.videoEl.onerror = () => {
             if (resolved) return;
@@ -729,15 +744,56 @@ class VideoPlayer {
             return false;
         };
 
-        const drainQueues = () => {
-            flushVideo();
-            flushAudio();
-        };
-
         const forceEvictAll = () => {
             if (evicting) return;
             if (evict(videoSB, true)) return;
             if (audioSB && evict(audioSB, true)) return;
+        };
+
+        const flushVideo = () => {
+            if (videoAppending || !videoSB || videoSB.updating || videoSegQueue.length === 0) return;
+            if (!videoInitAppended && videoInitSegment) {
+                videoAppending = true;
+                videoSB.appendBuffer(videoInitSegment);
+                videoInitAppended = true;
+                console.log('[MSE] Video init appended');
+                return;
+            }
+            videoAppending = true;
+            const seg = videoSegQueue.shift();
+            try { videoSB.appendBuffer(seg); }
+            catch(e) {
+                console.error('[MSE] Video append error:', e.message);
+                videoAppending = false;
+                if (e.name === 'QuotaExceededError') {
+                    console.warn('[MSE] Video buffer full, evicting...');
+                    pendingEviction = true;
+                    if (!videoSB.updating && !evicting) forceEvictAll();
+                }
+            }
+        };
+
+        const flushAudio = () => {
+            if (!audioSB || audioAppending || audioSB.updating || audioSegQueue.length === 0) return;
+            if (!audioInitAppended && audioInitSegment) {
+                audioAppending = true;
+                audioSB.appendBuffer(audioInitSegment);
+                audioInitAppended = true;
+                console.log('[MSE] Audio init appended');
+                return;
+            }
+            audioAppending = true;
+            const seg = audioSegQueue.shift();
+            try { audioSB.appendBuffer(seg); }
+            catch(e) {
+                console.error('[MSE] Audio append error:', e.message);
+                audioAppending = false;
+                if (e.name === 'QuotaExceededError') {
+                    console.warn('[MSE] Audio buffer full, evicting...');
+                    pendingEviction = true;
+                    if (!audioSB.updating && !evicting) forceEvictAll();
+                }
+            }
         };
 
         try {
@@ -765,7 +821,10 @@ class VideoPlayer {
 
                 if (!MediaSource.isTypeSupported(videoMime)) {
                     console.warn('[MSE] Not supported:', videoMime);
-                    this.showErrorMessage('Formato nao suportado pelo navegador.');
+                    const isHevc = /^hvc|^hev|^hev1/i.test(vc) || vc.indexOf('hvc1') === 0;
+                    this.showErrorMessage(isHevc
+                        ? 'Video HEVC (H.265) nao suportado por este navegador. Tente outro canal ou qualidade.'
+                        : 'Formato nao suportado pelo navegador.');
                     cleanup();
                     return;
                 }
@@ -804,52 +863,6 @@ class VideoPlayer {
                 }
 
                 mp4boxFile.start();
-
-                const flushVideo = () => {
-                    if (videoAppending || !videoSB || videoSB.updating || videoSegQueue.length === 0) return;
-                    if (!videoInitAppended && videoInitSegment) {
-                        videoAppending = true;
-                        videoSB.appendBuffer(videoInitSegment);
-                        videoInitAppended = true;
-                        console.log('[MSE] Video init appended');
-                        return;
-                    }
-                    videoAppending = true;
-                    const seg = videoSegQueue.shift();
-                        try { videoSB.appendBuffer(seg); }
-                    catch(e) {
-                        console.error('[MSE] Video append error:', e.message);
-                        videoAppending = false;
-                        if (e.name === 'QuotaExceededError') {
-                            console.warn('[MSE] Video buffer full, evicting...');
-                            pendingEviction = true;
-                            if (!videoSB.updating && !evicting) forceEvictAll();
-                        }
-                    }
-                };
-
-                const flushAudio = () => {
-                    if (!audioSB || audioAppending || audioSB.updating || audioSegQueue.length === 0) return;
-                    if (!audioInitAppended && audioInitSegment) {
-                        audioAppending = true;
-                        audioSB.appendBuffer(audioInitSegment);
-                        audioInitAppended = true;
-                        console.log('[MSE] Audio init appended');
-                        return;
-                    }
-                    audioAppending = true;
-                    const seg = audioSegQueue.shift();
-                    try { audioSB.appendBuffer(seg); }
-                    catch(e) {
-                        console.error('[MSE] Audio append error:', e.message);
-                        audioAppending = false;
-                        if (e.name === 'QuotaExceededError') {
-                            console.warn('[MSE] Audio buffer full, evicting...');
-                            pendingEviction = true;
-                            if (!audioSB.updating && !evicting) forceEvictAll();
-                        }
-                    }
-                };
 
                 mediaSource = new MediaSource();
                 this.videoEl.src = URL.createObjectURL(mediaSource);

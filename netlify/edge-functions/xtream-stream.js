@@ -61,15 +61,16 @@ export default async (request, context) => {
 
     const resHeaders = new Headers(upstream.headers);
     resHeaders.delete('content-encoding');
-    resHeaders.delete('content-length');
     resHeaders.set('Access-Control-Allow-Origin', '*');
     resHeaders.set('Cache-Control', 'no-cache');
+    if (!resHeaders.get('Accept-Ranges')) resHeaders.set('Accept-Ranges', 'bytes');
 
     const ct = (upstream.headers.get('content-type') || '').toLowerCase();
     const finalUrl = upstream.url || parsed.href;
     const isPlaylist = ct.includes('mpegurl') || /\.m3u8(\?|$)/i.test(parsed.pathname);
 
     if (isPlaylist && request.method !== 'HEAD') {
+        resHeaders.delete('content-length');
         const text = await upstream.text();
         const proxyBase = url.origin + '/xtream-stream';
         const rewritten = rewritePlaylist(text, proxyBase, finalUrl);

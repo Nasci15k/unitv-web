@@ -1,6 +1,20 @@
 (function () {
     'use strict';
     var PLACEHOLDER = 'assets/images/placeholder.svg';
+    var DEAD_HOSTS = {
+        'logos.imperioapps.xyz': 1,
+        'loopstatic.net': 1,
+        '32q0d.xyz': 1,
+        'fenix7.com': 1,
+        'imagizer.imageshack.com': 1
+    };
+
+    function isDeadHost(url) {
+        try {
+            var u = new URL(url, location.href);
+            return !!DEAD_HOSTS[u.hostname];
+        } catch (e) { return false; }
+    }
 
     function fixImg(img) {
         if (!img || img.dataset.guardFixed) return;
@@ -8,11 +22,16 @@
         if (!img.hasAttribute('loading')) img.setAttribute('loading', 'lazy');
         if (!img.hasAttribute('decoding')) img.setAttribute('decoding', 'async');
         if (!img.hasAttribute('referrerpolicy')) img.setAttribute('referrerpolicy', 'no-referrer');
+        if (img.src && isDeadHost(img.src)) {
+            img.src = PLACEHOLDER;
+            return;
+        }
         var prev = img.onerror;
         img.onerror = function () {
             if (prev && prev.call) { try { prev.call(img); } catch (e) {} }
             if (img.src.indexOf('placeholder.svg') !== -1) return;
             img.onerror = null;
+            if (isDeadHost(img.src)) { img.src = PLACEHOLDER; return; }
             img.src = PLACEHOLDER;
         };
         if (img.complete && img.naturalWidth === 0 && img.src && img.src.indexOf('placeholder.svg') === -1) {

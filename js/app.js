@@ -13,6 +13,16 @@
     const currentTimeEl = $('current-time');
 
     const PER_PAGE = 48;
+    const PLACEHOLDER_IMG = 'assets/images/placeholder.svg';
+    const DEAD_IMG_HOSTS = { 'logos.imperioapps.xyz': 1, 'loopstatic.net': 1, '32q0d.xyz': 1, 'fenix7.com': 1, 'imagizer.imageshack.com': 1 };
+    function safeImg(url) {
+        if (!url || !url.trim()) return PLACEHOLDER_IMG;
+        try {
+            const u = new URL(url, location.href);
+            if (DEAD_IMG_HOSTS[u.hostname]) return PLACEHOLDER_IMG;
+        } catch (e) { return PLACEHOLDER_IMG; }
+        return url;
+    }
     const state = { section: 'live', allLive: [], allMovies: [], allSeries: [], liveCats: [], vodCats: [], seriesCats: [], moviesPage: 1, seriesPage: 1, movieSection: 'general', seriesSection: 'general', liveSection: 'general', movieFilterMode: 'todos', seriesFilterMode: 'todos', movieGenre: '', movieYear: '', seriesGenre: '', seriesYear: '', movieCat: '', seriesCat: '', favTab: 'favorites', searchType: '', historyDeleteMode: false, adultUnlocked: false, currentEpg: null, jogosLoaded: false, jogosDateIdx: 0, jogosGames: [], jogosComps: {}, jogosCountries: {}, filterSel: { tipo: 'Filmes', genero: 'Todos', ano: 'Todos' } };
     const watched = {};
 
@@ -857,7 +867,7 @@
         const num = index != null ? (index + 1) : '';
         const hasIcon = stream.stream_icon && stream.stream_icon.trim();
         const cat = ContentFilter.cleanCategoryName(stream.category_name || '');
-        const logoSrc = hasIcon ? stream.stream_icon : 'assets/images/placeholder.svg';
+        const logoSrc = hasIcon ? safeImg(stream.stream_icon) : PLACEHOLDER_IMG;
         card.innerHTML = '<span class="ch-number">#' + num + '</span><img class="ch-logo" src="' + logoSrc + '" loading="lazy" decoding="async" referrerpolicy="no-referrer" alt="" onerror="this.onerror=null;this.src=\'assets/images/placeholder.svg\'"><div class="ch-info"><div class="ch-name">' + esc(stream.name) + '</div><div class="ch-category">' + esc(cat) + '<span class="ch-epg-mini" data-epg-for="' + stream.stream_id + '"></span></div></div><div class="ch-status-dot ' + (hasIcon ? 'warning' : 'offline') + '" title="Status do canal"></div>';
         card.addEventListener('click', () => {
             const play = () => {
@@ -917,7 +927,7 @@
             const pct = Math.min(100, (prog.lastWatchedPosition / prog.totalDuration) * 100);
             progBar = '<div class="card-progress"><div class="card-progress-fill" style="width:' + pct + '%"></div></div>';
         }
-        const posterSrc = img || 'assets/images/placeholder.svg';
+        const posterSrc = safeImg(img);
         card.innerHTML = badge + favBtn + '<img class="poster-img" src="' + posterSrc + '" loading="lazy" decoding="async" referrerpolicy="no-referrer" alt="" onerror="this.onerror=null;this.src=\'assets/images/placeholder.svg\'">' + progBar + '<div class="card-body"><div class="card-title">' + esc(title) + '</div>' + (item.rating ? '<div class="card-meta"><span class="rating"><i class="fas fa-star"></i> ' + esc(String(item.rating)) + '</span>' + (item.year ? '<span class="year">' + esc(item.year) + '</span>' : '') + '</div>' : '') + '</div>';
         card.querySelector('.card-fav')?.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -1004,7 +1014,7 @@
         const resumeBtn = hasResume ? '<button class="btn-watch secondary" id="btn-resume-movie"><i class="fas fa-redo"></i> Continue Assistindo (' + player.fmt(prog.lastWatchedPosition) + ')</button>' : '';
         const trailerBtn = '<button class="btn-watch secondary" id="btn-trailer-movie" disabled><i class="fas fa-film"></i> Trailer</button>';
 
-        const imgTag = '<img class="detail-poster" src="' + (img || 'assets/images/placeholder.svg') + '" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src=\'assets/images/placeholder.svg\'" alt="">';
+        const imgTag = '<img class="detail-poster" src="' + safeImg(img) + '" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src=\'assets/images/placeholder.svg\'" alt="">';
         content.innerHTML = '<div class="detail-header">' + imgTag + '<div class="detail-info"><h2>' + esc(title) + '</h2><div class="detail-meta">' + meta + '</div>' + (plot ? '<p class="detail-desc">' + esc(plot) + '</p>' : '<p class="detail-desc">Sem descricao disponivel.</p>') + (cast ? '<p class="detail-desc" style="margin-top:-8px"><strong>Elenco:</strong> ' + esc(cast) + '</p>' : '') + '<div class="detail-actions">' + resumeBtn + '<button class="btn-watch" id="btn-play-movie"><i class="fas fa-play"></i> Assistir Agora</button>' + trailerBtn + '</div></div></div>';
         $('btn-play-movie')?.addEventListener('click', () => {
             WatchStore.record('movie', movie.stream_id, title);
@@ -1055,7 +1065,7 @@
                 '</div><div class="episodes-grid" id="episodes-grid"></div>';
         }
 
-        const serImgTag = '<img class="detail-poster" src="' + (img || 'assets/images/placeholder.svg') + '" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src=\'assets/images/placeholder.svg\'" alt="">';
+        const serImgTag = '<img class="detail-poster" src="' + safeImg(img) + '" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src=\'assets/images/placeholder.svg\'" alt="">';
         content.innerHTML = '<div class="detail-header">' + serImgTag + '<div class="detail-info"><h2>' + esc(title) + '</h2><div class="detail-meta">' + meta + '</div>' + (plot ? '<p class="detail-desc">' + esc(plot) + '</p>' : '<p class="detail-desc">Sem descricao disponivel.</p>') + '</div></div>' + seasonsHtml;
 
         if (seasons.length) {
