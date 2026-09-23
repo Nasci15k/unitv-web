@@ -22,6 +22,9 @@
         if (!img.hasAttribute('loading')) img.setAttribute('loading', 'lazy');
         if (!img.hasAttribute('decoding')) img.setAttribute('decoding', 'async');
         if (!img.hasAttribute('referrerpolicy')) img.setAttribute('referrerpolicy', 'no-referrer');
+        if (img.src && img.src.indexOf('http://') === 0) {
+            img.src = img.src.replace(/^http:\/\//i, 'https://');
+        }
         if (img.src && isDeadHost(img.src)) {
             img.src = PLACEHOLDER;
             return;

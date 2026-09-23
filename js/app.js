@@ -18,10 +18,11 @@
     function safeImg(url) {
         if (!url || !url.trim()) return PLACEHOLDER_IMG;
         try {
-            const u = new URL(url, location.href);
+            let u = new URL(url, location.href);
             if (DEAD_IMG_HOSTS[u.hostname]) return PLACEHOLDER_IMG;
+            if (u.protocol === 'http:') { u.protocol = 'https:'; return u.href; }
+            return u.href;
         } catch (e) { return PLACEHOLDER_IMG; }
-        return url;
     }
     const state = { section: 'live', allLive: [], allMovies: [], allSeries: [], liveCats: [], vodCats: [], seriesCats: [], moviesPage: 1, seriesPage: 1, movieSection: 'general', seriesSection: 'general', liveSection: 'general', movieFilterMode: 'todos', seriesFilterMode: 'todos', movieGenre: '', movieYear: '', seriesGenre: '', seriesYear: '', movieCat: '', seriesCat: '', favTab: 'favorites', searchType: '', historyDeleteMode: false, adultUnlocked: false, currentEpg: null, jogosLoaded: false, jogosDateIdx: 0, jogosGames: [], jogosComps: {}, jogosCountries: {}, filterSel: { tipo: 'Filmes', genero: 'Todos', ano: 'Todos' } };
     const watched = {};
