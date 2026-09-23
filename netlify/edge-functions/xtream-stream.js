@@ -6,7 +6,8 @@ function rewritePlaylist(text, proxyBase, baseUrl) {
         if (!t || t.startsWith('#')) return line;
         try {
             const abs = new URL(t, baseUrl);
-            return proxyBase + abs.pathname + abs.search;
+            if (!/^https?:$/i.test(abs.protocol)) return line;
+            return proxyBase + '/__f/' + encodeURIComponent(abs.href);
         } catch {
             return line;
         }
@@ -15,8 +16,30 @@ function rewritePlaylist(text, proxyBase, baseUrl) {
 
 export default async (request, context) => {
     const url = new URL(request.url);
-    const splat = url.pathname.replace(/^\/xtream-stream/, '') || '/';
-    const target = UPSTREAM + splat + url.search;
+    let splat = url.pathname.replace(/^\/xtream-stream/, '') || '/';
+    let target;
+    let extraSearch = url.search;
+
+    if (splat.startsWith('/__f/')) {
+        try {
+            target = decodeURIComponent(splat.slice(5));
+            extraSearch = '';
+        } catch {
+            return new Response('Bad Request', { status: 400 });
+        }
+    } else {
+        target = UPSTREAM + splat + extraSearch;
+    }
+
+    let parsed;
+    try {
+        parsed = new URL(target);
+        if (!/^https?:$/i.test(parsed.protocol)) {
+            return new Response('Bad Request', { status: 400 });
+        }
+    } catch {
+        return new Response('Bad Request', { status: 400 });
+    }
 
     const fwd = new Headers();
     const range = request.headers.get('Range');
@@ -27,7 +50,7 @@ export default async (request, context) => {
 
     let upstream;
     try {
-        upstream = await fetch(target, {
+        upstream = await fetch(parsed.href, {
             method: request.method === 'HEAD' ? 'HEAD' : 'GET',
             headers: fwd,
             redirect: 'follow'
@@ -43,12 +66,13 @@ export default async (request, context) => {
     resHeaders.set('Cache-Control', 'no-cache');
 
     const ct = (upstream.headers.get('content-type') || '').toLowerCase();
-    const isPlaylist = ct.includes('mpegurl') || /\.m3u8(\?|$)/i.test(splat);
+    const finalUrl = upstream.url || parsed.href;
+    const isPlaylist = ct.includes('mpegurl') || /\.m3u8(\?|$)/i.test(parsed.pathname);
 
     if (isPlaylist && request.method !== 'HEAD') {
         const text = await upstream.text();
         const proxyBase = url.origin + '/xtream-stream';
-        const rewritten = rewritePlaylist(text, proxyBase, upstream.url || target);
+        const rewritten = rewritePlaylist(text, proxyBase, finalUrl);
         return new Response(rewritten, {
             status: upstream.status,
             statusText: upstream.statusText,
