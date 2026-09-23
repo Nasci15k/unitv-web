@@ -14,6 +14,7 @@ class XtreamAPI {
         this._liveCache = [];
         this._movieCache = [];
         this._seriesCache = [];
+        this._pending = new Map();
     }
 
     setCredentials(server, user, pass) {
@@ -21,6 +22,27 @@ class XtreamAPI {
         this.username = user;
         this.password = pass;
         this.cache.clear();
+        this._pending.clear();
+    }
+
+    _isDefaultServer() {
+        const s = String(this.serverUrl || '').replace(/\/+$/, '').replace(/^http:\/\//i, 'https://');
+        return s === 'https://telefunplay.xyz';
+    }
+
+    _useProxy() {
+        if (typeof window === 'undefined') return false;
+        return this._isDefaultServer();
+    }
+
+    _apiOrigin() {
+        if (this._useProxy()) return window.location.origin + '/xtream-api';
+        return this.serverUrl;
+    }
+
+    _streamOrigin() {
+        if (this._useProxy()) return window.location.origin + '/xtream-stream';
+        return this.serverUrl;
     }
 
     getSessionParams() {
@@ -28,7 +50,7 @@ class XtreamAPI {
     }
 
     getApiUrl(action, params = {}) {
-        const base = `${this.serverUrl}/player_api.php`;
+        const base = `${this._apiOrigin()}/player_api.php`;
         const auth = this.getSessionParams();
         const extra = Object.entries(params).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&');
         let url = `${base}?${auth}${action ? '&action=' + action : ''}`;
@@ -39,13 +61,14 @@ class XtreamAPI {
     getStreamUrl(type, id, ext) {
         const user = encodeURIComponent(this.username);
         const pass = encodeURIComponent(this.password);
+        const origin = this._streamOrigin();
         if (type === 'live') {
             const extension = ext === 'm3u8' ? 'm3u8' : 'ts';
-            return `${this.serverUrl}/live/${user}/${pass}/${id}.${extension}`;
+            return `${origin}/live/${user}/${pass}/${id}.${extension}`;
         }
         const prefix = type === 'series' ? 'series' : 'movie';
         const extension = ext || 'mp4';
-        return `${this.serverUrl}/${prefix}/${user}/${pass}/${id}.${extension}`;
+        return `${origin}/${prefix}/${user}/${pass}/${id}.${extension}`;
     }
 
     getVideoUrl(type, id, ext) {
@@ -54,40 +77,58 @@ class XtreamAPI {
         const extension = ext || 'mp4';
         const user = encodeURIComponent(this.username);
         const pass = encodeURIComponent(this.password);
-        return `${this.serverUrl}/${prefix}/${user}/${pass}/${id}.${extension}`;
+        return `${this._streamOrigin()}/${prefix}/${user}/${pass}/${id}.${extension}`;
+    }
+
+    getTimeshiftUrl(streamId, startStr, duration = 9999) {
+        const user = encodeURIComponent(this.username);
+        const pass = encodeURIComponent(this.password);
+        return `${this._streamOrigin()}/streaming/timeshift.php?stream=${encodeURIComponent(streamId)}&start=${encodeURIComponent(startStr)}&duration=${duration}&username=${user}&password=${pass}&extension=m3u8`;
     }
 
     getChannelIcon(streamId) {
-        return `${this.serverUrl}/player_api.php?${this.getSessionParams()}&type=get_image&stream_icon=${encodeURIComponent(streamId)}`;
+        return `${this._apiOrigin()}/player_api.php?${this.getSessionParams()}&type=get_image&stream_icon=${encodeURIComponent(streamId)}`;
     }
+
     async fetch(url, retries = this.maxRetries) {
         const cached = this.cache.get(url);
         if (cached && Date.now() - cached.time < this.cacheTime) return cached.data;
+        if (this._pending.has(url)) return this._pending.get(url);
 
-        try {
-            const res = await window.fetch(url, {
-                headers: { 'Accept': 'application/json' }
-            });
+        const run = (async () => {
+            try {
+                const res = await window.fetch(url, {
+                    headers: { 'Accept': 'application/json' }
+                });
 
-            if (!res.ok) {
-                if (retries > 0) {
-                    await new Promise(r => setTimeout(r, 1000));
+                if (!res.ok) {
+                    const retryable = res.status === 429 || res.status >= 500;
+                    if (retryable && retries > 0) {
+                        await new Promise(r => setTimeout(r, 1200 + (this.maxRetries - retries) * 800));
+                        return this.fetch(url, retries - 1);
+                    }
+                    throw new Error(`HTTP ${res.status}`);
+                }
+
+                const data = await res.json();
+                this.cache.set(url, { data, time: Date.now() });
+                return data;
+            } catch (err) {
+                const msg = String(err && err.message || '');
+                const corsLike = err instanceof TypeError || /Failed to fetch|NetworkError|CORS/i.test(msg);
+                if (!corsLike && retries > 0) {
+                    await new Promise(r => setTimeout(r, 800));
                     return this.fetch(url, retries - 1);
                 }
-                throw new Error(`HTTP ${res.status}`);
+                if (!corsLike) console.error('API Error:', err);
+                throw err;
+            } finally {
+                this._pending.delete(url);
             }
+        })();
 
-            const data = await res.json();
-            this.cache.set(url, { data, time: Date.now() });
-            return data;
-        } catch (err) {
-            if (retries > 0) {
-                await new Promise(r => setTimeout(r, 1000));
-                return this.fetch(url, retries - 1);
-            }
-            console.error('API Error:', err);
-            throw err;
-        }
+        this._pending.set(url, run);
+        return run;
     }
 
     async authenticate() {
@@ -130,7 +171,7 @@ class XtreamAPI {
     }
 
     async getXmlTv() {
-        const url = `${this.serverUrl}/xmltv.php?${this.getSessionParams()}`;
+        const url = `${this._apiOrigin()}/xmltv.php?${this.getSessionParams()}`;
         try {
             const res = await window.fetch(url, { headers: { 'Accept': 'application/xml,text/xml,*/*' } });
             if (!res.ok) throw new Error(`HTTP ${res.status}`);

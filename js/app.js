@@ -687,6 +687,25 @@
     }
 
     const epgMiniCache = new Map();
+    const epgQueue = [];
+    let epgActive = 0;
+    const EPG_MAX = 2;
+
+    function drainEpgQueue() {
+        if (epgActive >= EPG_MAX || !epgQueue.length) return;
+        const job = epgQueue.shift();
+        epgActive++;
+        getEpgOnAir(job.streamId).then(listing => {
+            if (job.card && job.card.isConnected) {
+                const el = job.card.querySelector('.ch-epg-mini');
+                if (el && listing && listing.title) el.textContent = ' • ' + listing.title;
+            }
+        }).finally(() => {
+            epgActive--;
+            drainEpgQueue();
+        });
+    }
+
     async function getEpgOnAir(streamId) {
         if (epgMiniCache.has(streamId)) return epgMiniCache.get(streamId);
         try {
@@ -762,10 +781,15 @@
     function loadMiniEpg(card) {
         const sid = card.getAttribute('data-stream-id');
         if (!sid) return;
-        getEpgOnAir(sid).then(listing => {
+        if (epgMiniCache.has(sid)) {
+            const listing = epgMiniCache.get(sid);
             const el = card.querySelector('.ch-epg-mini');
             if (el && listing && listing.title) el.textContent = ' • ' + listing.title;
-        });
+            return;
+        }
+        if (epgQueue.some(j => j.streamId === sid)) return;
+        epgQueue.push({ streamId: sid, card });
+        drainEpgQueue();
     }
 
     function probeChannelStatus(card) {
@@ -797,7 +821,11 @@
             const url = api.getStreamUrl('live', streamId);
             const ctrl = new AbortController();
             const timer = setTimeout(() => ctrl.abort(), 4000);
-            const res = await fetch(url, { method: 'GET', signal: ctrl.signal });
+            const res = await fetch(url, {
+                method: 'GET',
+                headers: { Range: 'bytes=0-1' },
+                signal: ctrl.signal
+            });
             clearTimeout(timer);
             if (res.status === 404) return 'offline';
             if (!res.ok && res.status !== 206) return 'warning';
@@ -1148,9 +1176,7 @@
     }
 
     function generatePlaybackUrl(streamId, startDate) {
-        let server = String(api.serverUrl || '').replace(/\/+$/, '');
-        const user = api.username, pass = api.password;
-        if (!server || !user || !pass) return null;
+        if (!api.username || !api.password) return null;
         const fmt = new Date(startDate.getTime() - startDate.getTimezoneOffset() * 60000);
         const yyyy = fmt.getFullYear();
         const MM = String(fmt.getMonth() + 1).padStart(2, '0');
@@ -1158,7 +1184,7 @@
         const HH = String(fmt.getHours()).padStart(2, '0');
         const mm = String(fmt.getMinutes()).padStart(2, '0');
         const start = yyyy + '-' + MM + '-' + dd + ':' + HH + '-' + mm;
-        return server + '/streaming/timeshift.php?stream=' + encodeURIComponent(streamId) + '&start=' + start + '&duration=9999&username=' + encodeURIComponent(user) + '&password=' + encodeURIComponent(pass) + '&extension=m3u8';
+        return api.getTimeshiftUrl(streamId, start);
     }
 
     $('epg-reserve-btn')?.addEventListener('click', () => {

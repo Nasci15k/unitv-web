@@ -1,6 +1,21 @@
 [build]
   publish = "."
 
+# Proxy Xtream API (evita CORS; Netlify preserve query string)
+[[redirects]]
+  from = "/xtream-api/*"
+  to = "https://telefunplay.xyz/:splat"
+  status = 200
+  force = true
+
+# Proxy de streams/timeshift (evita CORS e mixed content quando o upstream redireciona)
+[[redirects]]
+  from = "/xtream-stream/*"
+  to = "https://telefunplay.xyz/:splat"
+  status = 200
+  force = true
+
+# SPA fallback (deve ser o último)
 [[redirects]]
   from = "/*"
   to = "/index.html"

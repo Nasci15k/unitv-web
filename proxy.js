@@ -1,4 +1,5 @@
 const http = require('http');
+const https = require('https');
 const url = require('url');
 const path = require('path');
 const fs = require('fs');
@@ -61,6 +62,35 @@ function serve(req, res, filePath, allowFallback) {
     fs.createReadStream(filePath).pipe(res);
   });
 }
+const XTREAM_HOST = 'telefunplay.xyz';
+
+function proxyXtream(req, res, upstreamPath) {
+  const target = `https://${XTREAM_HOST}${upstreamPath}`;
+  const upstream = https.request(target, {
+    method: req.method,
+    headers: Object.assign({}, req.headers, {
+      host: XTREAM_HOST,
+      origin: undefined,
+      referer: undefined
+    })
+  }, (ures) => {
+    const headers = Object.assign({}, ures.headers, CORS);
+    delete headers['content-encoding'];
+    delete headers['content-length'];
+    res.writeHead(ures.statusCode || 502, headers);
+    ures.pipe(res);
+  });
+  upstream.on('error', (e) => {
+    console.error('[PROXY]', e.message);
+    if (!res.headersSent) {
+      res.writeHead(502, Object.assign({ 'Content-Type': 'text/plain' }, CORS));
+      res.end('Bad Gateway');
+    }
+  });
+  if (req.method === 'GET' || req.method === 'HEAD') upstream.end();
+  else req.pipe(upstream);
+}
+
 const server = http.createServer((req, res) => {
   if (req.method === 'OPTIONS') { res.writeHead(204, CORS); res.end(); return; }
   if (req.method !== 'GET' && req.method !== 'HEAD') {
@@ -72,6 +102,12 @@ const server = http.createServer((req, res) => {
   let p;
   try { p = decodeURIComponent(parsed.pathname || '/'); } catch (e) { p = '/'; }
   if (p.indexOf('\0') !== -1) { res.writeHead(400, CORS); res.end('400 Bad Request'); return; }
+
+  if (p.startsWith('/xtream-api/') || p.startsWith('/xtream-stream/')) {
+    const upstreamPath = p.replace(/^\/xtream-(api|stream)/, '') + (parsed.search || '');
+    proxyXtream(req, res, upstreamPath);
+    return;
+  }
 
   const filePath = path.resolve(path.join(ROOT, p === '/' ? 'index.html' : p));
   if (filePath !== ROOT && filePath.indexOf(ROOT + path.sep) !== 0) {

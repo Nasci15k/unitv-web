@@ -364,8 +364,11 @@ class VideoPlayer {
 
         this.playAttempt++;
         const hlsUrl = this.toHlsUrl(url);
+        const viaProxy = typeof window !== 'undefined' && url.indexOf(window.location.origin + '/') === 0;
 
-        if (typeof mpegts !== 'undefined' && mpegts.isSupported() && this.playAttempt <= 2) {
+        if (viaProxy && typeof Hls !== 'undefined' && Hls.isSupported()) {
+            this.playHLS(hlsUrl);
+        } else if (typeof mpegts !== 'undefined' && mpegts.isSupported() && this.playAttempt <= 2) {
             this.playMpegts(url);
         } else if (typeof Hls !== 'undefined' && Hls.isSupported()) {
             this.playHLS(hlsUrl);
