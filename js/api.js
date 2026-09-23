@@ -1,6 +1,6 @@
 class XtreamAPI {
     constructor() {
-        this.serverUrl = 'http://telefunplay.xyz';
+        this.serverUrl = 'https://telefunplay.xyz';
         this.username = 'TurboBrasil@2026';
         this.password = '@27101992';
         this.userData = null;
