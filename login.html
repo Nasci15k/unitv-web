@@ -111,16 +111,14 @@
     return 'index.html';
   }
   function afterLogin() {
-    var p = AuthStore.getProfile();
-    var st = (p && p.status) || 'approved';
-    var role = p && p.role;
+    var st = AuthStore.getStatus();
     if (st === 'rejected') {
       flash('err', 'Sua conta foi recusada. Fale com o administrador.');
       AuthStore.signOut();
       setBusy(btnSignin, false, 'Entrar');
       return;
     }
-    if (st === 'pending' && role !== 'admin') {
+    if (st === 'pending' && !AuthStore.isAdmin()) {
       flash('warn', 'Conta criada! Aguarde a aprovação de um administrador para usar o app.');
       setBusy(btnSignin, false, 'Entrar');
       return;
@@ -138,9 +136,8 @@
 
   AuthStore.init().then(function () {
     if (AuthStore.isAuthenticated()) {
-      var p = AuthStore.getProfile();
-      var st = (p && p.status) || 'approved';
-      if (st === 'pending' && (!p || p.role !== 'admin')) {
+      var st = AuthStore.getStatus();
+      if (st === 'pending' && !AuthStore.isAdmin()) {
         flash('warn', 'Conta aguardando aprovação de um administrador.');
         return;
       }

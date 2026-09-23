@@ -70,48 +70,13 @@
         else if (approved) plan.textContent = 'Membro';
         else plan.textContent = 'Sem acesso';
       }
-      enforceAccess(authed, approved, admin, status);
+      enforceAccess();
       return { authed: authed, approved: approved, admin: admin, status: status };
     }).catch(function () { return null; });
   }
 
-  function enforceAccess(authed, approved, admin, status) {
-    var splash = $('splash-screen');
-    if (!authed) {
-      if (splash && !splash.classList.contains('fade-out')) {
-        // stay on splash; point user to login via sidebar link
-      }
-      return;
-    }
-    if (!approved && !admin) {
-      if (splash) {
-        splash.classList.remove('fade-out');
-        var badge = splash.querySelector('.status-badge');
-        if (badge) {
-          badge.innerHTML = '<i class="fas fa-hourglass-half"></i> Conta aguardando aprovação do admin';
-          badge.style.color = '#fcd34d';
-          badge.style.borderColor = 'rgba(245,158,11,.35)';
-          badge.style.background = 'rgba(245,158,11,.12)';
-        }
-        var btn = $('btn-enter');
-        if (btn) {
-          btn.disabled = true;
-          btn.style.opacity = '0.55';
-          btn.innerHTML = '<i class="fas fa-lock"></i> Aguardando aprovação';
-        }
-        var tag = splash.querySelector('.splash-tagline');
-        if (tag) tag.textContent = status === 'rejected' ? 'Conta recusada pelo administrador' : 'Entre com conta aprovada ou crie uma';
-      }
-      var app = $('app');
-      if (app) app.style.display = 'none';
-      return;
-    }
-    var b = $('btn-enter');
-    if (b) {
-      b.disabled = false;
-      b.style.opacity = '';
-      b.innerHTML = '<i class="fas fa-play"></i> Entrar';
-    }
+  function enforceAccess() {
+    // splash removida; boot é feito em app.js (bootApp)
   }
 
   function requireApprovedAccess() {
@@ -140,21 +105,6 @@
       e.preventDefault();
       AuthStore.signOut().then(function () { location.href = 'login.html'; });
     });
-
-    $('btn-enter')?.addEventListener('click', function (e) {
-      if (!window.AuthStore) return;
-      AuthStore.init().then(function () {
-        if (!AuthStore.isAuthenticated()) {
-          e.stopImmediatePropagation();
-          e.preventDefault();
-          location.href = 'login.html?next=index.html';
-        } else if (!AuthStore.isApproved() && !AuthStore.isAdmin()) {
-          e.stopImmediatePropagation();
-          e.preventDefault();
-          location.href = 'login.html?next=index.html';
-        }
-      });
-    }, true);
 
     if (window.AuthStore) {
       AuthStore.onAuthChange(function () { syncAuthUi(); });

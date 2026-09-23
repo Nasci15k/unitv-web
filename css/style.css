@@ -18,34 +18,16 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 ::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:10px}
 .hidden{display:none!important}
 
-/* === SPLASH === */
-.splash{position:fixed;inset:0;z-index:9999;background:var(--bg-0);display:flex;align-items:center;justify-content:center;transition:opacity .5s ease,visibility .5s}
-.splash.fade-out{opacity:0;visibility:hidden}
-.splash-content{text-align:center;animation:splashIn .6s cubic-bezier(.2,.8,.2,1)}
-@keyframes splashIn{from{opacity:0;transform:scale(.9) translateY(20px)}to{opacity:1;transform:scale(1) translateY(0)}}
-.splash-logo-wrap{margin-bottom:28px}
-.splash-logo-icon{margin:0 auto 16px}
-.splash-logo-icon svg{width:72px;height:72px;filter:drop-shadow(0 0 40px rgba(233,69,96,.3))}
-.splash-title{font-size:36px;font-weight:900;letter-spacing:-1px;color:#fff}
-.splash-title span{background:var(--accent-gradient);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-.splash-tagline{font-size:14px;color:var(--text-3);margin-top:4px}
-.status-badge{display:inline-flex;align-items:center;gap:8px;margin-top:20px;padding:8px 20px;background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.2);border-radius:50px;font-size:13px;color:var(--success);font-weight:500}
-.status-badge i{font-size:12px}
-.enter-btn{margin-top:24px;padding:14px 48px;background:var(--accent-gradient);border:none;border-radius:50px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;transition:var(--transition);display:inline-flex;align-items:center;gap:10px;font-family:var(--font);position:relative;overflow:hidden}
-.enter-btn::before{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent 30%,rgba(255,255,255,.12) 50%,transparent 70%);background-size:250% 100%;animation:shimmer 3s infinite}
-@keyframes shimmer{0%{background-position:250% 0}100%{background-position:-250% 0}}
+/* === AUTH GATE (sem splash) === */
+.auth-gate{position:fixed;inset:0;z-index:9999;background:var(--bg-0);display:flex;align-items:center;justify-content:center}
+.auth-gate.hidden{display:none!important}
+.auth-gate-card{text-align:center;max-width:360px;padding:32px 24px;animation:splashIn .45s cubic-bezier(.2,.8,.2,1)}
+@keyframes splashIn{from{opacity:0;transform:scale(.92) translateY(12px)}to{opacity:1;transform:scale(1) translateY(0)}}
+.auth-gate-logo{font-size:32px;font-weight:900;letter-spacing:-1px;margin-bottom:16px}
+.auth-gate-logo span{background:var(--accent-gradient);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.auth-gate-card p{color:var(--text-3);font-size:14px;line-height:1.5;margin-bottom:8px}
+.enter-btn{margin-top:20px;padding:14px 40px;background:var(--accent-gradient);border:none;border-radius:50px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;transition:var(--transition);display:inline-flex;align-items:center;gap:10px;font-family:var(--font);text-decoration:none}
 .enter-btn:hover{transform:translateY(-2px);box-shadow:0 8px 30px var(--accent-glow)}
-.splash-settings{margin-top:24px;text-align:center}
-.splash-settings summary{list-style:none;color:var(--text-3);font-size:13px;cursor:pointer;padding:10px;border-radius:8px;transition:var(--transition);display:inline-flex;align-items:center;gap:6px}
-.splash-settings summary:hover{color:var(--text-2);background:rgba(255,255,255,.03)}
-.splash-settings summary::-webkit-details-marker{display:none}
-.splash-settings summary i{font-size:12px}
-.splash-settings form{margin-top:12px;display:flex;flex-direction:column;gap:8px;width:280px;margin-left:auto;margin-right:auto}
-.splash-settings input{padding:10px 14px;background:var(--bg-2);border:1px solid var(--border);border-radius:8px;color:var(--text-1);font-size:13px;font-family:var(--font);transition:var(--transition)}
-.splash-settings input:focus{outline:none;border-color:var(--accent)}
-.splash-settings input::placeholder{color:var(--text-3)}
-.splash-settings button{padding:10px;background:var(--bg-3);border:1px solid var(--border);border-radius:8px;color:var(--text-1);cursor:pointer;font-size:13px;font-family:var(--font);transition:var(--transition);font-weight:500}
-.splash-settings button:hover{border-color:var(--accent);background:rgba(233,69,96,.1)}
 
 /* === LAYOUT === */
 #app{position:relative;z-index:1;height:100vh;display:flex}

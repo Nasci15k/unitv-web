@@ -1,9 +1,7 @@
 ﻿document.addEventListener('DOMContentLoaded', () => {
     const $ = (id) => document.getElementById(id);
-    const splashScreen = $('splash-screen');
     const appEl = $('app');
-    const loginForm = $('login-form');
-    const btnEnter = $('btn-enter');
+    const authGate = $('auth-gate');
     const loadingOverlay = $('loading-overlay');
     const loadingText = $('loading-text');
     const sidebar = $('sidebar');
@@ -260,8 +258,11 @@
     function esc(s) { return s ? String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;') : ''; }
     function safe(fn) { return fn().catch(() => null); }
 
+    let entered = false;
     async function enterApp() {
-        splashScreen.classList.add('fade-out');
+        if (entered) return;
+        entered = true;
+        if (authGate) authGate.classList.add('hidden');
         appEl.style.display = 'flex';
         showLoading('Conectando ao servidor...');
         try {
@@ -272,50 +273,74 @@
                 showToast('Bem-vindo ao OpenTv!', 'success');
             } else {
                 showToast('Falha na autenticacao', 'error');
-                splashScreen.classList.remove('fade-out');
+                entered = false;
                 appEl.style.display = 'none';
+                if (authGate) {
+                    authGate.classList.remove('hidden');
+                    const msg = $('auth-gate-msg');
+                    if (msg) msg.textContent = 'Falha ao conectar ao servidor Xtream.';
+                }
             }
         } catch (err) {
             console.error(err);
             showToast('Erro: ' + err.message, 'error');
-            splashScreen.classList.remove('fade-out');
+            entered = false;
             appEl.style.display = 'none';
+            if (authGate) authGate.classList.remove('hidden');
         }
         hideLoading();
     }
-    btnEnter.addEventListener('click', (e) => {
-        if (window.AuthStore) {
-            AuthStore.init().then(() => {
-                if (!AuthStore.isAuthenticated()) {
-                    e.stopImmediatePropagation();
-                    location.href = 'login.html?next=index.html';
-                    return;
-                }
-                if (!AuthStore.isApproved() && !AuthStore.isAdmin()) {
-                    e.stopImmediatePropagation();
-                    location.href = 'login.html?next=index.html';
-                    return;
-                }
-                enterApp();
-            });
+
+    function showGate(message, showLogin, loginLabel) {
+        if (authGate) authGate.classList.remove('hidden');
+        const msg = $('auth-gate-msg');
+        if (msg && message) msg.textContent = message;
+        const link = $('auth-gate-login');
+        if (link) {
+            if (showLogin === false) link.classList.add('hidden');
+            else {
+                link.classList.remove('hidden');
+                if (loginLabel) link.innerHTML = loginLabel;
+            }
+        }
+        appEl.style.display = 'none';
+    }
+
+    async function bootApp() {
+        if (!window.AuthStore) {
+            if (authGate) authGate.classList.add('hidden');
+            await enterApp();
             return;
         }
-        enterApp();
-    });
-    loginForm?.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const s = $('server-url')?.value?.trim(), u = $('username')?.value?.trim(), p = $('password')?.value?.trim();
-        if (!s || !u || !p) return showToast('Preencha todos os campos', 'error');
-        api.setCredentials(s, u, p); enterApp();
-    });
+        try {
+            await AuthStore.init();
+        } catch (e) { /* segue mesmo assim */ }
+        if (!AuthStore.isAuthenticated()) {
+            showGate('Faça login para abrir o player.', true, '<i class="fas fa-sign-in-alt"></i> Entrar');
+            return;
+        }
+        const status = AuthStore.getStatus();
+        if (status === 'rejected') {
+            showGate('Conta recusada pelo administrador.', true, '<i class="fas fa-user-slash"></i> Trocar conta');
+            return;
+        }
+        if (!AuthStore.isApproved() && !AuthStore.isAdmin()) {
+            showGate('Conta aguardando aprovação do administrador.', true, '<i class="fas fa-hourglass-half"></i> Ver status');
+            return;
+        }
+        await enterApp();
+    }
+
+    $('auth-gate-retry')?.addEventListener('click', () => bootApp());
+
     btnLogout.addEventListener('click', () => {
         if (window.AuthStore && AuthStore.isAuthenticated()) {
             AuthStore.signOut().then(() => { location.href = 'login.html'; });
             return;
         }
         appEl.style.display = 'none';
-        splashScreen.classList.remove('fade-out');
         api.cache.clear();
+        showGate('Sessão encerrada.', true, '<i class="fas fa-sign-in-alt"></i> Entrar');
     });
 
     function navigateTo(section) {
@@ -1564,4 +1589,6 @@
         m.classList.add('hidden');
         if (m.id === 'player-modal') player.stop();
     }));
+
+    bootApp();
 });

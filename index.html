@@ -16,44 +16,25 @@
 </head>
 <body>
 
-    <!-- Splash -->
-    <div id="splash-screen" class="splash">
-        <div class="splash-content">
-            <div class="splash-logo-wrap">
-                <div class="splash-logo-icon">
-                    <svg viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <rect width="60" height="60" rx="14" fill="url(#g1)"/>
-                        <path d="M18 18 L30 30 L18 42" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-                        <path d="M32 18 L44 30 L32 42" stroke="rgba(255,255,255,0.5)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-                        <defs><linearGradient id="g1" x1="0" y1="0" x2="60" y2="60"><stop offset="0%" stop-color="#e94560"/><stop offset="100%" stop-color="#7c3aed"/></linearGradient></defs>
-                    </svg>
-                </div>
-                <h1 class="splash-title">Open<span>Tv</span></h1>
-                <p class="splash-tagline">Player IPTV Premium</p>
-            </div>
-            <div class="status-badge">
-                <i class="fas fa-check-circle"></i> Acesso liberado
-            </div>
-            <button class="enter-btn" id="btn-enter">
-                <i class="fas fa-play"></i> Entrar
-            </button>
-            <details class="splash-settings">
-                <summary><i class="fas fa-cog"></i> Configurar servidor</summary>
-                <form id="login-form">
-                    <input type="text" id="server-url" placeholder="URL do servidor Xtream">
-                    <input type="text" id="username" placeholder="Usuario">
-                    <input type="password" id="password" placeholder="Senha">
-                    <button type="submit">Conectar</button>
-                </form>
-            </details>
-        </div>
-    </div>
-
     <!-- Loading -->
     <div id="loading-overlay" class="loading-overlay hidden">
         <div class="loading-content">
             <div class="loading-spinner"></div>
             <p id="loading-text">Carregando...</p>
+        </div>
+    </div>
+
+    <!-- Auth gate (sem splash) -->
+    <div id="auth-gate" class="auth-gate">
+        <div class="auth-gate-card">
+            <div class="auth-gate-logo">Open<span>Tv</span></div>
+            <p id="auth-gate-msg">Verificando acesso...</p>
+            <a id="auth-gate-login" class="enter-btn hidden" href="login.html?next=index.html">
+                <i class="fas fa-sign-in-alt"></i> Entrar
+            </a>
+            <button id="auth-gate-retry" class="enter-btn hidden" type="button">
+                <i class="fas fa-redo"></i> Tentar novamente
+            </button>
         </div>
     </div>
 

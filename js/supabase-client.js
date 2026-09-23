@@ -90,6 +90,18 @@
       .select('id,email,full_name,role,status,created_at')
       .eq('id', user.id).maybeSingle()
       .then(function (res) {
+        if (res && res.error) {
+          var msg = String(res.error.message || '');
+          var schemaMissing = /does not exist|schema cache|PGRST205|relation/i.test(msg);
+          profile = {
+            id: user.id, email: user.email,
+            full_name: (user.user_metadata && user.user_metadata.full_name) || '',
+            role: 'user',
+            status: schemaMissing ? 'approved' : 'pending',
+            created_at: user.created_at || new Date().toISOString()
+          };
+          return profile;
+        }
         profile = (res && res.data) || null;
         if (profile && !profile.status) profile.status = 'approved';
         if (!profile) {
@@ -104,10 +116,12 @@
         }
         return profile;
       })
-      .catch(function () {
+      .catch(function (err) {
+        var msg = String((err && err.message) || '');
+        var schemaMissing = /does not exist|schema cache|PGRST205|relation/i.test(msg);
         profile = {
           id: user.id, email: user.email, full_name: '',
-          role: 'user', status: 'pending',
+          role: 'user', status: schemaMissing ? 'approved' : 'pending',
           created_at: user.created_at || new Date().toISOString()
         };
         return profile;
