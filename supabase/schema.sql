@@ -80,6 +80,10 @@ security definer
 set search_path = public
 as $$
 begin
+  -- SQL Editor / conexão direta (sem JWT) pode alterar livremente
+  if coalesce(current_setting('request.jwt.claims', true), '') = '' then
+    return new;
+  end if;
   if new.role is distinct from old.role
      and coalesce(public.is_admin(), false) = false then
     raise exception 'Apenas administradores podem alterar o papel.';
