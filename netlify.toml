@@ -1,14 +1,21 @@
 [build]
   publish = "."
 
-# Proxy Xtream API (evita CORS; Netlify preserve query string)
+[[edge_functions]]
+  path = "/xtream-api/*"
+  function = "xtream-api"
+
+[[edge_functions]]
+  path = "/xtream-stream/*"
+  function = "xtream-stream"
+
+# Proxy fallback (se edge function não rodar)
 [[redirects]]
   from = "/xtream-api/*"
   to = "https://telefunplay.xyz/:splat"
   status = 200
   force = true
 
-# Proxy de streams/timeshift (evita CORS e mixed content quando o upstream redireciona)
 [[redirects]]
   from = "/xtream-stream/*"
   to = "https://telefunplay.xyz/:splat"
