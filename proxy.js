@@ -1,212 +1,87 @@
 const http = require('http');
-const https = require('https');
 const url = require('url');
 const path = require('path');
 const fs = require('fs');
 
-const PROXY_PORT = 3000;
-const TARGET_HOST = 'telefunplay.xyz';
-const TARGET_PORT = 80;
+process.on('uncaughtException', (e) => { console.error('[UNCAUGHT]', e.message); });
+process.on('unhandledRejection', (e) => { console.error('[UNHANDLED]', e?.message || e); });
+
+const PORT = 3001;
+const ROOT = path.resolve(__dirname);
 
 const MIME = {
-  '.html': 'text/html', '.css': 'text/css', '.js': 'application/javascript',
-  '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg',
-  '.gif': 'image/gif', '.svg': 'image/svg+xml', '.ico': 'image/x-icon',
-  '.woff2': 'font/woff2', '.woff': 'font/woff', '.ttf': 'font/ttf',
-  '.mp4': 'video/mp4', '.m3u8': 'application/vnd.apple.mpegurl',
-  '.ts': 'video/mp2t', '.m3u': 'application/vnd.apple.mpegurl'
+  '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'application/javascript',
+  '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.webp': 'image/webp',
+  '.woff': 'font/woff', '.woff2': 'font/woff2', '.ttf': 'font/ttf', '.mp4': 'video/mp4',
+  '.webm': 'video/webm', '.mp3': 'audio/mpeg', '.m3u8': 'application/vnd.apple.mpegurl',
+  '.m3u': 'application/vnd.apple.mpegurl', '.ts': 'video/mp2t', '.vtt': 'text/vtt; charset=utf-8',
+  '.xml': 'application/xml', '.txt': 'text/plain; charset=utf-8'
 };
 
-function buildHeaders(host, extraHeaders = {}) {
-  const headers = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
-    'Accept': '*/*',
-    'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
-    'Accept-Encoding': 'identity',
-    'Cache-Control': 'no-cache',
-    'Referer': 'http://telefunplay.xyz/',
-    ...extraHeaders
-  };
-  delete headers['host'];
-  return headers;
-}
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+  'Access-Control-Allow-Headers': '*'
+};
 
-function forwardRequest(targetHost, targetPath, clientReq, clientRes, isTarget = true) {
-  return new Promise((resolve) => {
-    const fullUrl = `http://${targetHost}${targetPath}`;
-    console.log(`[PROXY] ${clientReq.method} ${fullUrl}`);
-
-    const options = {
-      hostname: targetHost,
-      port: TARGET_PORT,
-      path: targetPath,
-      method: clientReq.method,
-      headers: buildHeaders(targetHost),
-      timeout: 30000
-    };
-
-    const proxyReq = http.request(options, (proxyRes) => {
-      const headers = { ...proxyRes.headers };
-
-      // Handle redirect: follow server-side
-      if (proxyRes.statusCode >= 300 && proxyRes.statusCode < 400 && proxyRes.headers.location) {
-        const redirectUrl = new URL(proxyRes.headers.location, `http://${targetHost}`);
-        console.log(`[REDIRECT] -> ${redirectUrl.toString()}`);
-        proxyRes.resume();
-
-        // Build new request to redirect target
-        const redirHost = redirectUrl.hostname;
-        const redirPath = redirectUrl.pathname + redirectUrl.search;
-
-        const redirOptions = {
-          hostname: redirHost,
-          port: redirectUrl.port || (redirectUrl.protocol === 'https:' ? 443 : 80),
-          path: redirPath,
-          method: clientReq.method,
-          headers: buildHeaders(redirHost)
-        };
-
-        const redirectProtocol = redirectUrl.protocol === 'https:' ? https : http;
-        const redirReq = redirectProtocol.request(redirOptions, (redirRes) => {
-          const redirHeaders = { ...redirRes.headers };
-          redirHeaders['access-control-allow-origin'] = '*';
-          redirHeaders['access-control-allow-methods'] = '*';
-          redirHeaders['access-control-allow-headers'] = '*';
-          delete redirHeaders['content-security-policy'];
-          delete redirHeaders['x-frame-options'];
-          clientRes.writeHead(redirRes.statusCode, redirHeaders);
-          redirRes.pipe(clientRes);
-          resolve();
-        });
-
-        redirReq.on('error', (err) => {
-          console.error(`[REDIRECT ERROR] ${err.message}`);
-          if (!clientRes.headersSent) {
-            clientRes.writeHead(502, { 'Content-Type': 'application/json' });
-            clientRes.end(JSON.stringify({ error: 'Redirect error: ' + err.message }));
-          }
-          resolve();
-        });
-
-        redirReq.end();
-        return;
-      }
-
-      // Normal response
-      headers['access-control-allow-origin'] = '*';
-      headers['access-control-allow-methods'] = '*';
-      headers['access-control-allow-headers'] = '*';
-      delete headers['content-security-policy'];
-      delete headers['x-frame-options'];
-      clientRes.writeHead(proxyRes.statusCode, headers);
-      proxyRes.pipe(clientRes);
-      resolve();
-    });
-
-    proxyReq.on('error', (err) => {
-      console.error(`[PROXY ERROR] ${err.message}`);
-      if (!clientRes.headersSent) {
-        clientRes.writeHead(502, { 'Content-Type': 'application/json' });
-        clientRes.end(JSON.stringify({ error: 'Proxy error: ' + err.message }));
-      }
-      resolve();
-    });
-
-    proxyReq.setTimeout(30000, () => {
-      proxyReq.destroy();
-      if (!clientRes.headersSent) {
-        clientRes.writeHead(504, { 'Content-Type': 'application/json' });
-        clientRes.end(JSON.stringify({ error: 'Gateway timeout' }));
-      }
-      resolve();
-    });
-
-    if (clientReq.method !== 'GET' && clientReq.method !== 'HEAD') {
-      clientReq.pipe(proxyReq);
-    } else {
-      proxyReq.end();
+function serve(req, res, filePath, allowFallback) {
+  fs.stat(filePath, (err, stat) => {
+    if (err || !stat.isFile()) {
+      if (allowFallback) return serve(req, res, path.join(ROOT, 'index.html'), false);
+      res.writeHead(404, Object.assign({ 'Content-Type': 'text/plain; charset=utf-8' }, CORS));
+      res.end('404 Not Found');
+      return;
     }
+    const ext = path.extname(filePath).toLowerCase();
+    const headers = Object.assign({
+      'Content-Type': MIME[ext] || 'application/octet-stream',
+      'Content-Length': stat.size,
+      'Cache-Control': 'no-cache',
+      'Accept-Ranges': 'bytes'
+    }, CORS);
+
+    const range = req.headers.range;
+    if (range && /^bytes=\d*-\d*$/.test(range)) {
+      const m = range.match(/bytes=(\d*)-(\d*)/);
+      let start = m[1] ? parseInt(m[1], 10) : 0;
+      let end = m[2] ? parseInt(m[2], 10) : stat.size - 1;
+      if (isNaN(start) || start >= stat.size) start = 0;
+      if (isNaN(end) || end >= stat.size) end = stat.size - 1;
+      if (start > end) { res.writeHead(416, CORS); res.end(); return; }
+      headers['Content-Range'] = 'bytes ' + start + '-' + end + '/' + stat.size;
+      headers['Content-Length'] = end - start + 1;
+      res.writeHead(206, headers);
+      if (req.method === 'HEAD') { res.end(); return; }
+      fs.createReadStream(filePath, { start, end }).pipe(res);
+      return;
+    }
+    res.writeHead(200, headers);
+    if (req.method === 'HEAD') { res.end(); return; }
+    fs.createReadStream(filePath).pipe(res);
   });
 }
-
-const server = http.createServer(async (req, res) => {
-  // Handle CORS preflight
-  if (req.method === 'OPTIONS') {
-    res.writeHead(204, {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': '*'
-    });
-    res.end();
+const server = http.createServer((req, res) => {
+  if (req.method === 'OPTIONS') { res.writeHead(204, CORS); res.end(); return; }
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    res.writeHead(405, Object.assign({ 'Content-Type': 'text/plain; charset=utf-8' }, CORS));
+    res.end('405 Method Not Allowed');
     return;
   }
+  const parsed = url.parse(req.url);
+  let p;
+  try { p = decodeURIComponent(parsed.pathname || '/'); } catch (e) { p = '/'; }
+  if (p.indexOf('\0') !== -1) { res.writeHead(400, CORS); res.end('400 Bad Request'); return; }
 
-  const parsedUrl = url.parse(req.url, true);
-
-  // API proxy
-  if (parsedUrl.pathname.startsWith('/api/')) {
-    const targetPath = parsedUrl.pathname.replace('/api/', '/') + (parsedUrl.search || '');
-    await forwardRequest(TARGET_HOST, targetPath, req, res);
+  const filePath = path.resolve(path.join(ROOT, p === '/' ? 'index.html' : p));
+  if (filePath !== ROOT && filePath.indexOf(ROOT + path.sep) !== 0) {
+    res.writeHead(403, Object.assign({ 'Content-Type': 'text/plain; charset=utf-8' }, CORS));
+    res.end('403 Forbidden');
     return;
   }
-
-  // Stream proxy (/stream/ -> strip prefix, /hls/ -> direct)
-  if (parsedUrl.pathname.startsWith('/stream/')) {
-    const targetPath = '/' + parsedUrl.pathname.slice('/stream/'.length) + (parsedUrl.search || '');
-    await forwardRequest(TARGET_HOST, targetPath, req, res);
-    return;
-  }
-  if (parsedUrl.pathname.startsWith('/hls/')) {
-    await forwardRequest(TARGET_HOST, parsedUrl.pathname + (parsedUrl.search || ''), req, res);
-    return;
-  }
-
-  // Static files
-  let filePath = path.join(__dirname, parsedUrl.pathname === '/' ? 'index.html' : parsedUrl.pathname);
-  
-  // Prevent directory traversal
-  if (!path.resolve(filePath).startsWith(path.resolve(__dirname))) {
-    res.writeHead(403);
-    res.end('Forbidden');
-    return;
-  }
-
-  if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
-    filePath = path.join(__dirname, 'index.html');
-  }
-
-  const ext = path.extname(filePath).toLowerCase();
-  const stat = fs.statSync(filePath);
-
-  // Support Range requests (important for video seeking)
-  const range = req.headers.range;
-  if (range && ext.match(/\.(mp4|mkv|avi|webm|ts|mp3)$/)) {
-    const parts = range.replace(/bytes=/, '').split('-');
-    const start = parseInt(parts[0], 10);
-    const end = parts[1] ? parseInt(parts[1], 10) : stat.size - 1;
-    const chunkSize = end - start + 1;
-
-    res.writeHead(206, {
-      'Content-Range': `bytes ${start}-${end}/${stat.size}`,
-      'Accept-Ranges': 'bytes',
-      'Content-Length': chunkSize,
-      'Content-Type': MIME[ext] || 'application/octet-stream',
-      'Access-Control-Allow-Origin': '*'
-    });
-    fs.createReadStream(filePath, { start, end }).pipe(res);
-  } else {
-    res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream' });
-    fs.createReadStream(filePath).pipe(res);
-  }
+  serve(req, res, filePath, true);
 });
 
-server.listen(PROXY_PORT, () => {
-  console.log('');
-  console.log('  UniTV Proxy');
-  console.log('  ============');
-  console.log(`  Running: http://localhost:${PROXY_PORT}`);
-  console.log(`  API:     http://localhost:${PROXY_PORT}/api/...`);
-  console.log(`  Stream:  http://localhost:${PROXY_PORT}/stream/...`);
-  console.log(`  Target:  http://${TARGET_HOST}`);
-  console.log('');
+server.listen(PORT, () => {
+  console.log(`\n  OpenTv Static — http://localhost:${PORT}\n`);
 });

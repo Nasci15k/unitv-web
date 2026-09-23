@@ -1,14 +1,13 @@
 class VideoPlayer {
     constructor() {
         this.hls = null;
-        this.mpegts = null;
-        this.dashPlayer = null;
+        this.mpegtsPlayer = null;
         this.container = document.getElementById('player-modal');
         this.videoEl = document.getElementById('video-player');
         this.titleEl = document.getElementById('player-title');
-        this.closeBtn = document.getElementById('btn-close-player');
         this.loader = document.getElementById('player-loader');
         this.errorBox = document.getElementById('player-error');
+        this.errorText = document.getElementById('player-error-text');
         this.retryBtn = document.getElementById('btn-retry');
         this.controls = document.getElementById('player-controls');
         this.btnPlayPause = document.getElementById('btn-play-pause');
@@ -16,13 +15,53 @@ class VideoPlayer {
         this.btnMute = document.getElementById('btn-mute');
         this.volumeSlider = document.getElementById('volume-slider');
         this.timeDisplay = document.getElementById('player-time');
-        this.liveBadge = document.getElementById('player-live-badge');
-        this.currentUrl = null;
+        this.liveBadge = document.getElementById('live-badge');
+        this.currentUrl = '';
         this.currentTitle = '';
         this.currentType = '';
-        this.controlsTimeout = null;
         this.isLive = false;
+        this.hideTimer = null;
+        this.retryCount = 0;
+        this.maxRetries = 3;
+        this.playAttempt = 0;
+        this.mediaRecoverCount = 0;
+        this._mkvMpegtsTried = false;
+        this._vodMpegtsTried = false;
+        this._inMkvFallback = false;
+        this._mkvMpegtsTimer = null;
 
+        this.seekBar = document.getElementById('seek-bar');
+        this.seekBarWrapper = document.getElementById('seek-bar-wrapper');
+        this.seekBuffered = document.getElementById('seek-buffered');
+        this.seekProgress = document.getElementById('seek-progress');
+        this.seekThumb = document.getElementById('seek-thumb');
+        this.seekTooltip = document.getElementById('seek-tooltip');
+        this.seekGroup = document.getElementById('seek-group');
+        this.timeCurrent = document.getElementById('player-time-current');
+        this.timeDuration = document.getElementById('player-time-duration');
+        this.btnBackward = document.getElementById('btn-backward');
+        this.btnForward = document.getElementById('btn-forward');
+        this.btnPlayCenter = document.getElementById('btn-play-center');
+        this.btnSubtitles = document.getElementById('btn-subtitles');
+        this.btnAudioTrack = document.getElementById('btn-audio-track');
+        this.btnSettingsPlayer = document.getElementById('btn-settings-player');
+        this.settingsPanel = document.getElementById('player-settings-panel');
+        this.subtitleOptions = document.getElementById('subtitle-options');
+        this.audioOptions = document.getElementById('audio-options');
+        this.qualityOptions = document.getElementById('quality-options');
+        this.centerControls = document.getElementById('player-center-controls');
+
+        this.seekDragging = false;
+
+        this.currentStreamId = null;
+        this.resumeAt = 0;
+        this.progressSaveTimer = null;
+        this.subtitleSize = 1;
+        this.subtitleStyle = 0;
+        this.subtitleDelay = 0;
+        this.loadSubtitlePrefs();
+
+        this.closeBtn = document.getElementById('btn-close-player');
         this.closeBtn?.addEventListener('click', () => this.stop());
         this.retryBtn?.addEventListener('click', () => this.retry());
         this.btnPlayPause?.addEventListener('click', () => this.togglePlay());
@@ -32,281 +71,1355 @@ class VideoPlayer {
         this.videoEl?.addEventListener('click', () => this.togglePlay());
         this.videoEl?.addEventListener('dblclick', () => this.toggleFullscreen());
         this.videoEl?.addEventListener('timeupdate', () => this.updateTime());
-        this.videoEl?.addEventListener('waiting', () => this.showLoader());
-        this.videoEl?.addEventListener('playing', () => this.hideLoader());
-        this.videoEl?.addEventListener('error', () => this.showError('Erro ao carregar o video'));
+        this.videoEl?.addEventListener('ended', () => this.saveProgressNow());
 
-        document.addEventListener('keydown', (e) => {
-            if (this.container.classList.contains('hidden')) return;
-            if (e.key === 'Escape') this.stop();
-            if (e.key === ' ') { e.preventDefault(); this.togglePlay(); }
-            if (e.key === 'ArrowRight') this.videoEl.currentTime += 10;
-            if (e.key === 'ArrowLeft') this.videoEl.currentTime -= 10;
-            if (e.key === 'ArrowUp') { this.videoEl.volume = Math.min(1, this.videoEl.volume + 0.1); }
-            if (e.key === 'ArrowDown') { this.videoEl.volume = Math.max(0, this.videoEl.volume - 0.1); }
-            if (e.key === 'f' || e.key === 'F') this.toggleFullscreen();
-            if (e.key === 'm' || e.key === 'M') this.toggleMute();
+        document.getElementById('btn-resume-continue')?.addEventListener('click', () => {
+            const pos = this._pendingResume || 0;
+            this.hideResumeModal();
+            this.resumeAt = pos;
+            if (this.videoEl && pos > 0) {
+                const trySeek = () => {
+                    if (isFinite(this.videoEl.duration) && this.videoEl.duration > pos) {
+                        this.videoEl.currentTime = pos;
+                    } else if (this.videoEl.readyState >= 1) {
+                        setTimeout(trySeek, 300);
+                    }
+                };
+                trySeek();
+            }
+            this.videoEl?.play().catch(() => {});
+        });
+        document.getElementById('btn-resume-restart')?.addEventListener('click', () => {
+            this.hideResumeModal();
+            this.resumeAt = 0;
+            this._pendingResume = 0;
+            if (this.videoEl) this.videoEl.currentTime = 0;
+            this.videoEl?.play().catch(() => {});
         });
 
-        document.addEventListener('fullscreenchange', () => {
-            if (!document.fullscreenElement) {
-                this.controls.style.opacity = '1';
-                clearTimeout(this.controlsTimeout);
+        this.btnPlayCenter?.addEventListener('click', (e) => { e.stopPropagation(); this.togglePlay(); });
+
+        this.btnBackward?.addEventListener('click', () => this.skip(-10));
+        this.btnForward?.addEventListener('click', () => this.skip(10));
+
+        if (this.seekBarWrapper) {
+            this.seekBarWrapper.addEventListener('mousedown', (e) => this.onSeekStart(e));
+            this.seekBarWrapper.addEventListener('mousemove', (e) => this.onSeekHover(e));
+            this.seekBarWrapper.addEventListener('mouseleave', () => this.onSeekHoverEnd());
+        }
+        document.addEventListener('mousemove', (e) => this.onSeekDragMove(e));
+        document.addEventListener('mouseup', (e) => this.onSeekDragEnd(e));
+
+        this.btnSettingsPlayer?.addEventListener('click', (e) => { e.stopPropagation(); this.toggleSettings(); });
+        document.addEventListener('click', (e) => {
+            if (this.settingsPanel && !this.settingsPanel.classList.contains('hidden')) {
+                if (this.settingsPanel.contains(e.target)) return;
+                if (this.btnSettingsPlayer && this.btnSettingsPlayer.contains(e.target)) return;
+                this.settingsPanel.classList.add('hidden');
             }
+        });
+
+        this.btnSubtitles?.addEventListener('click', () => this.toggleSettings());
+        this.btnAudioTrack?.addEventListener('click', () => this.toggleSettings());
+
+        document.querySelectorAll('#subtitle-size-options .settings-option').forEach(el => {
+            el.addEventListener('click', () => {
+                this.subtitleSize = parseInt(el.dataset.subSize, 10);
+                document.querySelectorAll('#subtitle-size-options .settings-option').forEach(o => o.classList.remove('active'));
+                el.classList.add('active');
+                this.applySubtitleStyle();
+                this.saveSubtitlePrefs();
+            });
+        });
+        document.querySelectorAll('#subtitle-style-options .settings-option').forEach(el => {
+            el.addEventListener('click', () => {
+                this.subtitleStyle = parseInt(el.dataset.subStyle, 10);
+                document.querySelectorAll('#subtitle-style-options .settings-option').forEach(o => o.classList.remove('active'));
+                el.classList.add('active');
+                this.applySubtitleStyle();
+                this.saveSubtitlePrefs();
+            });
+        });
+        document.getElementById('btn-sub-delay-minus')?.addEventListener('click', () => this.adjustSubtitleDelay(-0.5));
+        document.getElementById('btn-sub-delay-plus')?.addEventListener('click', () => this.adjustSubtitleDelay(0.5));
+        this.updateSubDelayLabel();
+
+        document.addEventListener('keydown', (e) => {
+            if (!this.container || this.container.classList.contains('hidden')) return;
+            if (e.key === 'Escape') {
+                if (this.settingsPanel && !this.settingsPanel.classList.contains('hidden')) {
+                    this.settingsPanel.classList.add('hidden');
+                    return;
+                }
+                this.stop();
+            }
+            if (e.key === ' ') { e.preventDefault(); this.togglePlay(); }
+            if (e.key === 'f' || e.key === 'F') this.toggleFullscreen();
+            if (e.key === 'ArrowRight') this.skip(10);
+            if (e.key === 'ArrowLeft') this.skip(-10);
         });
     }
 
-    play(streamUrl, title, type = 'live') {
+    play(streamUrl, title, type = 'live', opts = {}) {
         this.cleanup();
-        this.titleEl.textContent = title;
         this.currentUrl = streamUrl;
         this.currentTitle = title;
         this.currentType = type;
         this.isLive = type === 'live';
+        this.retryCount = 0;
+        this.playAttempt = 0;
+        this.mediaRecoverCount = 0;
+        this._mkvMpegtsTried = false;
+        this._vodMpegtsTried = false;
+        this._inMkvFallback = false;
+        if (this._mkvMpegtsTimer) { clearTimeout(this._mkvMpegtsTimer); this._mkvMpegtsTimer = null; }
+        this.currentStreamId = opts.streamId != null ? opts.streamId : null;
+        this.resumeAt = 0;
+        this._pendingResume = opts.resumeAt > 0 && !this.isLive ? opts.resumeAt : 0;
+        this.titleEl.textContent = title;
         this.container.classList.remove('hidden');
         document.body.style.overflow = 'hidden';
-        this.hideError();
-        this.showLoader();
-        this.liveBadge.classList.toggle('hidden', !this.isLive);
-
-        if (type === 'live') {
-            this.videoEl.setAttribute('playsinline', '');
-            this.videoEl.controls = false;
+        if (this.liveBadge) this.liveBadge.style.display = this.isLive ? 'inline-block' : 'none';
+        this.errorBox.classList.add('hidden');
+        this.loader.classList.remove('hidden');
+        this.updateSeekUI();
+        this.updateCenterPlayBtn();
+        this.hideSettingsPanel();
+        this.applySubtitleStyle();
+        this.startProgressSaver();
+        if (!this.isLive && this._pendingResume > 5) {
+            this.showResumeModal(this._pendingResume);
         }
-
         this.startStream(streamUrl);
-        this.showControlsTemporarily();
+    }
+
+    loadSubtitlePrefs() {
+        try {
+            const p = JSON.parse(localStorage.getItem('unitv_subtitle_settings') || '{}');
+            if (typeof p.size === 'number') this.subtitleSize = p.size;
+            if (typeof p.style === 'number') this.subtitleStyle = p.style;
+            if (typeof p.delay === 'number') this.subtitleDelay = p.delay;
+        } catch (e) {}
+        const sizeOpts = document.querySelectorAll('#subtitle-size-options .settings-option');
+        sizeOpts.forEach(o => o.classList.toggle('active', parseFloat(o.dataset.subSize) === this.subtitleSize));
+        const styleOpts = document.querySelectorAll('#subtitle-style-options .settings-option');
+        styleOpts.forEach(o => o.classList.toggle('active', parseInt(o.dataset.subStyle, 10) === this.subtitleStyle));
+        this.updateSubDelayLabel();
+        this.applySubtitleStyle();
+    }
+
+    applySubtitlePrefs() {
+        this.loadSubtitlePrefs();
+        if (this._maybeLoadSubs) this._maybeLoadSubs();
+    }
+
+    _maybeLoadSubs() {
+        if (!this.videoEl || this.isLive) return;
+        if (this.currentType !== 'movie' && this.currentType !== 'series' && this.currentType !== 'vod') return;
+        if (this.currentStreamId == null || !window.SubtitleStore) return;
+        const id = this.currentStreamId;
+        SubtitleStore.loadForVod(id, this.videoEl).then((list) => {
+            if (this.currentStreamId !== id) return;
+            this.populateNativeSubtitles();
+            if (!list || !list.length) {
+                const box = this.subtitleOptions;
+                if (box && box.querySelector('.settings-option-text')) {
+                    box.insertAdjacentHTML('beforeend',
+                        '<div class="settings-option" id="sub-local-opt"><span class="settings-option-text">Carregar legenda local</span></div>');
+                    document.getElementById('sub-local-opt')?.addEventListener('click', () => {
+                        SubtitleStore.createLocalInput(this.videoEl);
+                    });
+                }
+            }
+        }).catch(() => {});
+    }
+
+    saveSubtitlePrefs() {
+        try { localStorage.setItem('unitv_subtitle_settings', JSON.stringify({ size: this.subtitleSize, style: this.subtitleStyle, delay: this.subtitleDelay })); } catch (e) {}
+    }
+
+    adjustSubtitleDelay(delta) {
+        this.subtitleDelay = Math.round((this.subtitleDelay + delta) * 10) / 10;
+        this.subtitleDelay = Math.max(-10, Math.min(10, this.subtitleDelay));
+        this.updateSubDelayLabel();
+        this.saveSubtitlePrefs();
+        this.applySubtitleDelay();
+    }
+
+    updateSubDelayLabel() {
+        const el = document.getElementById('sub-delay-value');
+        if (el) el.textContent = (this.subtitleDelay > 0 ? '+' : '') + this.subtitleDelay.toFixed(1) + 's';
+    }
+
+    applySubtitleStyle() {
+        let styleEl = document.getElementById('cue-style');
+        if (!styleEl) {
+            styleEl = document.createElement('style');
+            styleEl.id = 'cue-style';
+            document.head.appendChild(styleEl);
+        }
+        const sizeMap = { 0: '0.8em', 1: '1em', 2: '1.4em' };
+        const styles = [
+            { color: 'rgba(255,255,255,1)', bg: 'rgba(0,0,0,0.75)' },
+            { color: 'rgb(255,220,0)', bg: 'rgba(0,0,0,0.75)' },
+            { color: 'rgba(255,255,255,1)', bg: 'rgba(0,0,0,0)' }
+        ];
+        const s = styles[this.subtitleStyle] || styles[0];
+        const fs = sizeMap[this.subtitleSize] || '1em';
+        styleEl.textContent = '#video-player::cue{font-size:' + fs + ';color:' + s.color + ';background:' + s.bg + ';}';
+    }
+
+    applySubtitleDelay() {
+        if (this.hls && this.hls.subtitleTrack >= 0) {
+            try { this.hls.subtitleDisplay = false; setTimeout(() => { if (this.hls) this.hls.subtitleDisplay = true; }, 50); } catch (e) {}
+        }
+        const tracks = this.videoEl?.textTracks;
+        if (tracks) {
+            for (let i = 0; i < tracks.length; i++) {
+                if (tracks[i].mode === 'showing') {
+                    try { tracks[i].mode = 'hidden'; setTimeout(() => { if (tracks[i]) tracks[i].mode = 'showing'; }, 50); } catch (e) {}
+                }
+            }
+        }
+    }
+
+    startProgressSaver() {
+        this.stopProgressSaver();
+        if (this.isLive || this.currentStreamId == null) return;
+        this.progressSaveTimer = setInterval(() => this.saveProgressNow(), 5000);
+    }
+
+    stopProgressSaver() {
+        if (this.progressSaveTimer) { clearInterval(this.progressSaveTimer); this.progressSaveTimer = null; }
+    }
+
+    saveProgressNow() {
+        if (this.isLive || this.currentStreamId == null || !this.videoEl) return;
+        if (!isFinite(this.videoEl.duration) || this.videoEl.duration <= 0) return;
+        if (typeof WatchStore !== 'undefined') {
+            WatchStore.saveProgress(this.currentType, this.currentStreamId, this.videoEl.currentTime, this.videoEl.duration, this.currentTitle);
+        }
+    }
+
+    resumeIfPossible() {
+        if (this.resumeAt > 0 && !this.isLive && isFinite(this.videoEl.duration) && this.videoEl.duration > this.resumeAt) {
+            const target = this.resumeAt;
+            this.resumeAt = 0;
+            const trySeek = () => {
+                if (this.videoEl.readyState >= 1) {
+                    this.videoEl.currentTime = target;
+                } else {
+                    setTimeout(trySeek, 200);
+                }
+            };
+            trySeek();
+        } else if (this.resumeAt > 0 && !this.isLive && (!isFinite(this.videoEl.duration) || this.videoEl.duration <= 0)) {
+            const onMeta = () => {
+                if (this.resumeAt > 0 && isFinite(this.videoEl.duration) && this.videoEl.duration > this.resumeAt) {
+                    this.videoEl.currentTime = this.resumeAt;
+                    this.resumeAt = 0;
+                }
+                this.videoEl.removeEventListener('loadedmetadata', onMeta);
+            };
+            this.videoEl.addEventListener('loadedmetadata', onMeta);
+        }
+    }
+
+    maybeSeekResume() {
+        if (this.resumeAt > 0 && !this.isLive) this.resumeIfPossible();
+    }
+
+    showResumeModal(position) {
+        const overlay = document.getElementById('resume-modal');
+        if (!overlay) return;
+        const label = document.getElementById('resume-position');
+        if (label) label.textContent = this.fmt(position);
+        this._pendingResume = position;
+        overlay.classList.remove('hidden');
+        try { this.videoEl?.pause(); } catch (e) {}
+        document.getElementById('btn-resume-continue')?.focus();
+    }
+
+    hideResumeModal() {
+        document.getElementById('resume-modal')?.classList.add('hidden');
+        this._pendingResume = 0;
     }
 
     startStream(url) {
-        this.showLoader();
+        this.loader.classList.remove('hidden');
+        this.errorBox.classList.add('hidden');
 
-        const isTs = url.includes('.ts');
-        const isM3u8 = url.includes('.m3u8');
-        const isMp4 = /\.(mp4|mkv|avi|mov|webm)/i.test(url);
+        const isVOD = this.currentType === 'movie' || this.currentType === 'series' || this.currentType === 'vod';
+        const isMP4 = url.match(/\.(mp4|mkv|avi|webm)(\?|$)/i);
 
-        if (isM3u8 || !isTs && !isMp4) {
-            this.playHLS(url);
-        } else if (isTs) {
-            this.playMpegts(url);
-        } else if (isMp4) {
-            this.playNative(url);
-        } else {
-            this.playHLS(url);
+        if (isVOD) {
+            this.playVideo(url);
+            return;
         }
-    }
 
-    playHLS(url) {
-        if (Hls.isSupported()) {
-            this.hls = new Hls({
-                maxBufferLength: 30,
-                maxMaxBufferLength: 120,
-                startFragPrefetch: true,
-                enableWorker: true,
-                lowLatencyMode: this.isLive,
-                backBufferLength: 90,
-                maxBufferSize: 60 * 1000 * 1000,
-                maxBufferHole: 0.5,
-                highBufferWatchdogPeriod: 3,
-                nudgeMaxRetry: 5,
-                nudgeOffset: 0.2,
-                maxFragLookUpTolerance: 0.25,
-                abrEwmaDefaultEstimate: 500000,
-                testBandwidth: false,
-                progressive: true
-            });
+        if (isMP4) {
+            this.playDirect(url);
+            return;
+        }
 
-            this.hls.loadSource(url);
-            this.hls.attachMedia(this.videoEl);
+        this.playAttempt++;
+        const hlsUrl = this.toHlsUrl(url);
 
-            this.hls.on(Hls.Events.MANIFEST_PARSED, () => {
-                this.videoEl.play().catch(() => {});
-                this.hideLoader();
-            });
-
-            this.hls.on(Hls.Events.ERROR, (event, data) => {
-                console.warn('HLS Error:', data.type, data.details);
-                if (data.fatal) {
-                    this.handleError('Stream indisponivel ou formato nao suportado');
-                } else if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-                    this.hls.startLoad();
-                } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
-                    this.hls.recoverMediaError();
-                }
-            });
-
-            this.hls.on(Hls.Events.FRAG_BUFFERED_START, () => {
-                this.hideLoader();
-            });
-
-            this.hls.on(Hls.Events.FRAG_LOAD_ERROR, () => {
-                if (this.isLive) {
-                    setTimeout(() => this.hls.startLoad(-1), 1000);
-                }
-            });
-
+        if (typeof mpegts !== 'undefined' && mpegts.isSupported() && this.playAttempt <= 2) {
+            this.playMpegts(url);
+        } else if (typeof Hls !== 'undefined' && Hls.isSupported()) {
+            this.playHLS(hlsUrl);
         } else if (this.videoEl.canPlayType('application/vnd.apple.mpegurl')) {
-            this.videoEl.src = url;
-            this.videoEl.addEventListener('loadedmetadata', () => {
-                this.videoEl.play().catch(() => {});
-                this.hideLoader();
-            }, { once: true });
-            this.videoEl.addEventListener('error', () => {
-                this.showError('Erro ao carregar stream');
-            }, { once: true });
+            this.playNativeHLS(hlsUrl);
+        } else {
+            this.playDirect(url);
         }
     }
 
     playMpegts(url) {
-        if (typeof mpegts === 'undefined') {
-            this.showError('Codec nao suportado pelo navegador');
+        this.loader.classList.remove('hidden');
+        console.log('[MPEGTS] Starting live stream');
+        try {
+            this.destroyMpegts();
+
+            this.mpegtsPlayer = mpegts.createPlayer({
+                type: 'mpegts',
+                url: url,
+                isLive: this.isLive,
+                cors: true,
+                hasAudio: true,
+                hasVideo: true
+            }, {
+                enableWorker: true,
+                enableStashBuffer: true,
+                stashInitialSize: 128,
+                autoCleanupSourceBuffer: true,
+                autoCleanupMaxBackwardDuration: 30,
+                autoCleanupMinBackwardDuration: 10,
+                liveBufferLatencyChasing: this.isLive,
+                liveBufferLatencyMaxLatency: this.isLive ? 5 : 0,
+                liveBufferLatencyMinRemain: this.isLive ? 2 : 0
+            });
+
+            this.mpegtsPlayer.attachMediaElement(this.videoEl);
+            this.mpegtsPlayer.load();
+            this.mpegtsPlayer.play();
+
+            let hasPlayed = false;
+            const onPlaying = () => {
+                hasPlayed = true;
+                this.loader.classList.add('hidden');
+                this.videoEl.removeEventListener('playing', onPlaying);
+            };
+            this.videoEl.addEventListener('playing', onPlaying);
+
+            setTimeout(() => {
+                if (!hasPlayed && !this.loader.classList.contains('hidden')) {
+                    this.loader.classList.add('hidden');
+                }
+            }, 8000);
+
+            this.mpegtsPlayer.on(mpegts.Events.ERROR, (errType, errDetail, errInfo) => {
+                console.warn('[MPEGTS]', errType, errDetail);
+                if (this._inMkvFallback) {
+                    this.destroyMpegts();
+                    this.showMkvError();
+                    return;
+                }
+                if (errType === mpegts.ErrorTypes.NETWORK_ERROR || errType === mpegts.ErrorTypes.MEDIA_ERROR) {
+                    console.log('[MPEGTS] Error, trying fallback playback');
+                    this.destroyMpegts();
+                    if (this.isLive) {
+                        this.playHLS(this.toHlsUrl(url));
+                    } else {
+                        this.playDirect(url);
+                    }
+                }
+            });
+
+        } catch (e) {
+            console.warn('[MPEGTS] Failed:', e.message);
+            if (this._inMkvFallback) {
+                this.showMkvError();
+            } else {
+                console.log('[MPEGTS] Trying direct fallback');
+                if (this.isLive) this.playHLS(this.toHlsUrl(url));
+                else this.playDirect(url);
+            }
+        }
+    }
+
+    playHLS(url) {
+        this.loader.classList.remove('hidden');
+        if (this.hls) { this.hls.destroy(); this.hls = null; }
+
+        this.hls = new Hls({
+            enableWorker: true,
+            lowLatencyMode: this.isLive,
+            maxBufferLength: this.isLive ? 10 : 30,
+            maxMaxBufferLength: this.isLive ? 30 : 120,
+            backBufferLength: 30,
+            startFragPrefetch: true,
+            maxBufferHole: 0.5,
+            highBufferWatchdogPeriod: 2,
+            nudgeOffset: 0.2,
+            nudgeMaxRetry: 5,
+            maxFragLookUpTolerance: 0.25,
+            abrEwmaDefaultEstimate: 500000,
+            testBandwidth: false,
+            progressive: true
+        });
+
+        this.hls.loadSource(url);
+        this.hls.attachMedia(this.videoEl);
+
+        this.hls.on(Hls.Events.MANIFEST_PARSED, () => {
+            this.loader.classList.add('hidden');
+            this.videoEl.play().catch(() => {});
+            this.populateHLSSubtitles();
+            this.populateHLSAudioTracks();
+            this.populateHLSQualityInfo();
+        });
+
+        this.hls.on(Hls.Events.FRAG_BUFFERED, () => {
+            this.loader.classList.add('hidden');
+            try { if (this.hls && this.hls.bandwidthEstimate) this.updateBandwidthDisplay(this.hls.bandwidthEstimate); } catch (e) {}
+        });
+
+        this.hls.on(Hls.Events.SUBTITLE_TRACKS_UPDATED, () => {
+            this.populateHLSSubtitles();
+        });
+
+        this.hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, () => {
+            this.populateHLSAudioTracks();
+        });
+
+        this.hls.on(Hls.Events.ERROR, (_, data) => {
+            console.warn('[HLS]', data.type, data.details, data.fatal);
+            if (data.fatal) {
+                switch (data.type) {
+                    case Hls.ErrorTypes.NETWORK_ERROR:
+                        if (this.retryCount < this.maxRetries) {
+                            this.retryCount++;
+                            setTimeout(() => {
+                                try { this.hls.startLoad(); } catch(e) {}
+                            }, 1000 * this.retryCount);
+                        } else {
+                            console.log('[HLS] Network errors exhausted, trying direct playback');
+                            this.hls.destroy(); this.hls = null;
+                            this.playDirect(url);
+                        }
+                        break;
+                    case Hls.ErrorTypes.MEDIA_ERROR:
+                        if (data.details === 'bufferAddCodecError') {
+                            console.log('[HLS] Codec not supported by MSE, trying direct playback');
+                            this.hls.destroy(); this.hls = null;
+                            this.playDirect(url);
+                            return;
+                        }
+                        if (this.mediaRecoverCount < 2) {
+                            this.mediaRecoverCount++;
+                            try { this.hls.recoverMediaError(); } catch (e) {
+                                console.log('[HLS] Recovery failed, trying direct');
+                                this.hls.destroy(); this.hls = null;
+                                this.playDirect(url);
+                            }
+                        } else {
+                            console.log('[HLS] Media errors exhausted, trying direct');
+                            this.hls.destroy(); this.hls = null;
+                            this.playDirect(url);
+                        }
+                        break;
+                    default:
+                        console.log('[HLS] Fatal error, trying direct');
+                        this.hls.destroy(); this.hls = null;
+                        this.playDirect(url);
+                        break;
+                }
+            }
+        });
+    }
+
+    async probeVodFormat(url) {
+        try {
+            const res = await fetch(url, {
+                headers: { Range: 'bytes=0-15' },
+                signal: AbortSignal.timeout ? AbortSignal.timeout(6000) : undefined
+            });
+            const buf = new Uint8Array(await res.arrayBuffer());
+            const ctype = (res.headers.get('content-type') || '').toLowerCase();
+            const acao = res.headers.get('access-control-allow-origin');
+            const mkv = (buf[0] === 0x1A && buf[1] === 0x45 && buf[2] === 0xDF && buf[3] === 0xA3) || ctype.includes('matroska') || ctype.includes('mkv');
+            const ts = buf[0] === 0x47 || ctype.includes('mp2t') || ctype.includes('mpegts');
+            const mp4 = (buf.length >= 8 && buf[4] === 0x66 && buf[5] === 0x74) || ctype.includes('mp4');
+            console.log('[PROBE]', { status: res.status, ctype, acao, mkv, ts, mp4 });
+            if (mkv) return 'mkv';
+            if (ts) return 'ts';
+            if (mp4) return 'mp4';
+            if (acao) return 'unknown-cors';
+            return 'unknown-nocors';
+        } catch (e) {
+            console.warn('[PROBE] failed:', e.message);
+            return 'unknown';
+        }
+    }
+
+    async playVideo(url) {
+        this.loader.classList.remove('hidden');
+        console.log('[VIDEO] VOD:', url.substring(0, 100));
+
+        if (this.mseFallbackTimer) { clearTimeout(this.mseFallbackTimer); this.mseFallbackTimer = null; }
+        if (this.mseAbortController) { this.mseAbortController.abort(); this.mseAbortController = null; }
+
+        this._vodProbe = null;
+        this.probeVodFormat(url).then(f => {
+            if (this.currentUrl === url) this._vodProbe = f;
+        }).catch(() => {});
+
+        this.videoEl.src = url;
+        this.videoEl.load();
+
+        let resolved = false;
+        const finish = () => {
+            if (resolved) return;
+            resolved = true;
+            if (this.mseFallbackTimer) { clearTimeout(this.mseFallbackTimer); this.mseFallbackTimer = null; }
+            this.loader.classList.add('hidden');
+            this.videoEl.play().catch(() => {});
+            this._maybeLoadSubs();
+            this.populateNativeSubtitles();
+            this.populateNativeQualityInfo();
+        };
+
+        this.videoEl.oncanplay = finish;
+        this.videoEl.onloadedmetadata = () => { finish(); this.resumeIfPossible(); };
+        this.videoEl.onloadeddata = () => { finish(); this.resumeIfPossible(); };
+
+        this.mseFallbackTimer = setTimeout(() => {
+            if (!resolved && this.videoEl.readyState < 2) {
+                console.log('[VIDEO] Native stuck rs=' + this.videoEl.readyState + ', aborting...');
+                this.videoEl.onloadeddata = null;
+                this.videoEl.oncanplay = null;
+                this.videoEl.onloadedmetadata = null;
+                this.videoEl.onerror = null;
+                this.videoEl.removeAttribute('src');
+                this.videoEl.load();
+                this.recoverVod(url);
+            }
+        }, 14000);
+
+        this.videoEl.onerror = () => {
+            if (resolved) return;
+            if (this.mseFallbackTimer) { clearTimeout(this.mseFallbackTimer); this.mseFallbackTimer = null; }
+            const err = this.videoEl.error;
+            console.warn('[VIDEO] Error:', err?.code, err?.message);
+            this.videoEl.onerror = null;
+            this.videoEl.removeAttribute('src');
+            this.videoEl.load();
+            this.recoverVod(url);
+        };
+    }
+
+    async recoverVod(url) {
+        if (this.currentUrl !== url) return;
+        let fmt = this._vodProbe;
+        if (!fmt) fmt = await this.probeVodFormat(url);
+        if (this.currentUrl !== url) return;
+        console.log('[VIDEO] recover fmt=', fmt);
+
+        if (fmt === 'mp4' || fmt === 'unknown-cors') {
+            this.playVideoMSE(url);
             return;
         }
 
-        this.mpegts = mpegts.createPlayer({
-            type: 'mpegts',
-            url: url,
-            isLive: this.isLive,
-            bufferTotalTime: 10,
-            enableStalledMute: true,
-            stalledTimeout: 3000
-        });
+        const mpegtsOk = typeof mpegts !== 'undefined' && mpegts.isSupported();
+        console.log('[VIDEO] recover mpegtsOk=', mpegtsOk, 'tried=', this._vodMpegtsTried);
+        if ((fmt === 'ts' || fmt === 'unknown' || fmt === 'unknown-nocors' || fmt === 'unknown-cors') && mpegtsOk && !this._vodMpegtsTried) {
+            this._vodMpegtsTried = true;
+            console.log('[VIDEO] Trying mpegts for', fmt);
+            this.playMpegts(url);
+            const tsTimer = setTimeout(() => {
+                if (this.videoEl && this.videoEl.readyState < 2 && this.currentUrl === url) {
+                    this.destroyMpegts();
+                    if (fmt === 'ts' || fmt === 'unknown-nocors') {
+                        this.showErrorMessage('Stream TS sem CORS ou nao suportado pelo navegador.');
+                    } else {
+                        this.playVideoMSE(url);
+                    }
+                }
+            }, 10000);
+            this.videoEl.addEventListener('loadedmetadata', () => clearTimeout(tsTimer), { once: true });
+            this.videoEl.addEventListener('playing', () => clearTimeout(tsTimer), { once: true });
+            return;
+        }
 
-        this.mpegts.attachMedia(this.videoEl);
-        this.mpegts.load();
-        this.mpegts.play().catch(() => {});
-        this.videoEl.addEventListener('playing', () => this.hideLoader(), { once: true });
+        if (fmt === 'mkv' || this.isMkvUrl(url)) {
+            this.tryMkvFallback(url);
+            return;
+        }
 
-        this.mpegts.on(mpegts.Events.ERROR, (err) => {
-            this.showError('Erro no stream TS: ' + (err.message || err));
-        });
+        this.playVideoMSE(url);
     }
 
-    playNative(url) {
-        this.videoEl.src = url;
-        this.videoEl.load();
-        this.videoEl.addEventListener('canplay', () => {
-            this.videoEl.play().catch(() => {});
-            this.hideLoader();
-        }, { once: true });
-        this.videoEl.addEventListener('error', () => {
-            this.showError('Erro ao carregar o video');
-        }, { once: true });
-    }
+    playVideoMSE(url) {
+        if (this.mseAbortController) { this.mseAbortController.abort(); this.mseAbortController = null; }
+        if (this._mseEvictionTimer) { clearInterval(this._mseEvictionTimer); this._mseEvictionTimer = null; }
+        this.loader.classList.remove('hidden');
+        console.log('[MSE] Starting MP4 playback via MSE:', url.substring(0, 100));
 
-    handleError(msg) {
-        this.showError(msg);
-    }
+        if (!window.MediaSource || !window.MP4Box) {
+            console.warn('[MSE] MediaSource or MP4Box not available, falling back');
+            this.playDirect(url);
+            return;
+        }
 
-    showLoader() {
-        if (this.loader) this.loader.classList.remove('hidden');
-    }
+        let mp4boxFile = null;
+        let mediaSource = null;
+        let videoSB = null;
+        let audioSB = null;
+        let fileOffset = 0;
+        let aborted = false;
+        let videoAppending = false;
+        let audioAppending = false;
+        let videoInitSegment = null;
+        let audioInitSegment = null;
+        let videoInitAppended = false;
+        let audioInitAppended = false;
+        let videoSegQueue = [];
+        let audioSegQueue = [];
+        let evictionTimer = null;
+        let evicting = false;
+        let pendingEviction = false;
 
-    hideLoader() {
-        if (this.loader) this.loader.classList.add('hidden');
-    }
+        const cleanup = () => {
+            aborted = true;
+            pendingEviction = false;
+            if (evictionTimer) { clearInterval(evictionTimer); evictionTimer = null; }
+            if (this._mseWatchdog) { clearInterval(this._mseWatchdog); this._mseWatchdog = null; }
+            if (mp4boxFile) { try { mp4boxFile.flush(); } catch(e) {} mp4boxFile = null; }
+            if (this.mseAbortController) { this.mseAbortController.abort(); this.mseAbortController = null; }
+        };
 
-    showError(msg) {
-        this.hideLoader();
-        if (this.errorBox) {
-            this.errorBox.querySelector('p').textContent = msg;
-            this.errorBox.classList.remove('hidden');
+        const evict = (sb, aggressive) => {
+            if (!sb || sb.updating) return false;
+            try {
+                const b = sb.buffered;
+                const ct = this.videoEl.currentTime;
+                if (b.length === 0) return false;
+                for (let i = 0; i < b.length; i++) {
+                    const start = b.start(i);
+                    const end = b.end(i);
+                    const totalBuf = end - start;
+                    const behind = ct - start;
+                    const ahead = end - ct;
+                    const threshold = aggressive ? 2 : (totalBuf > 180 ? 10 : 30);
+                    if (behind > threshold) {
+                        evicting = true;
+                        const keepBehind = aggressive ? 0 : Math.min(10, totalBuf * 0.3);
+                        const removeEnd = ct - keepBehind;
+                        sb.remove(start, Math.max(removeEnd, start + 1));
+                        console.log('[MSE] Evicted:', start.toFixed(1), '-', removeEnd.toFixed(1), '(total:', totalBuf.toFixed(1), 's)');
+                        return true;
+                    }
+                }
+            } catch(e) { console.warn('[MSE] Evict error:', e.message); }
+            return false;
+        };
+
+        const drainQueues = () => {
+            flushVideo();
+            flushAudio();
+        };
+
+        const forceEvictAll = () => {
+            if (evicting) return;
+            if (evict(videoSB, true)) return;
+            if (audioSB && evict(audioSB, true)) return;
+        };
+
+        try {
+            mp4boxFile = MP4Box.createFile();
+
+            mp4boxFile.onReady = (info) => {
+                ready = true;
+                if (this._mseWatchdog) { clearInterval(this._mseWatchdog); this._mseWatchdog = null; }
+                console.log('[MSE] MP4Box ready:', JSON.stringify(info).substring(0, 500));
+                const vt = info.videoTracks && info.videoTracks.length > 0 ? info.videoTracks[0] : null;
+                const at = info.audioTracks && info.audioTracks.length > 0 ? info.audioTracks[0] : null;
+
+                if (!vt) {
+                    console.error('[MSE] No video track found');
+                    this.showErrorMessage('Nenhuma faixa de video encontrada.');
+                    cleanup();
+                    return;
+                }
+
+                this.populateMSEQualityInfo(info);
+
+                let vc = vt.codec || (vt.info && vt.info.codec) || 'avc1.64001f';
+                const videoMime = 'video/mp4; codecs="' + vc + '"';
+                console.log('[MSE] Video MIME:', videoMime);
+
+                if (!MediaSource.isTypeSupported(videoMime)) {
+                    console.warn('[MSE] Not supported:', videoMime);
+                    this.showErrorMessage('Formato nao suportado pelo navegador.');
+                    cleanup();
+                    return;
+                }
+
+                let audioMime = '';
+                let ac = '';
+                if (at) {
+                    ac = at.codec || (at.info && at.info.codec) || 'mp4a.40.2';
+                    audioMime = 'audio/mp4; codecs="' + ac + '"';
+                    if (!MediaSource.isTypeSupported(audioMime)) {
+                        console.warn('[MSE] Audio MIME not supported:', audioMime);
+                        audioMime = '';
+                    }
+                }
+
+                const trackIds = [vt.id];
+                if (at && audioMime) trackIds.push(at.id);
+
+                mp4boxFile.onSegment = (trackId, user, buffer, sampleNum, isLast) => {
+                    const isVid = trackId === vt.id;
+                    const queue = isVid ? videoSegQueue : audioSegQueue;
+                    queue.push(new Uint8Array(buffer));
+                    if (isVid) flushVideo();
+                    else flushAudio();
+                };
+
+                for (const tid of trackIds) {
+                    mp4boxFile.setSegmentOptions(tid, null, { nbSamples: 100 });
+                }
+
+                const initSegs = mp4boxFile.initializeSegmentation();
+                console.log('[MSE] Init segments:', initSegs.length);
+                for (const seg of initSegs) {
+                    if (seg.id === vt.id) { videoInitSegment = seg.buffer; console.log('[MSE] Video init:', seg.buffer.byteLength); }
+                    else if (at && seg.id === at.id) { audioInitSegment = seg.buffer; console.log('[MSE] Audio init:', seg.buffer.byteLength); }
+                }
+
+                mp4boxFile.start();
+
+                const flushVideo = () => {
+                    if (videoAppending || !videoSB || videoSB.updating || videoSegQueue.length === 0) return;
+                    if (!videoInitAppended && videoInitSegment) {
+                        videoAppending = true;
+                        videoSB.appendBuffer(videoInitSegment);
+                        videoInitAppended = true;
+                        console.log('[MSE] Video init appended');
+                        return;
+                    }
+                    videoAppending = true;
+                    const seg = videoSegQueue.shift();
+                        try { videoSB.appendBuffer(seg); }
+                    catch(e) {
+                        console.error('[MSE] Video append error:', e.message);
+                        videoAppending = false;
+                        if (e.name === 'QuotaExceededError') {
+                            console.warn('[MSE] Video buffer full, evicting...');
+                            pendingEviction = true;
+                            if (!videoSB.updating && !evicting) forceEvictAll();
+                        }
+                    }
+                };
+
+                const flushAudio = () => {
+                    if (!audioSB || audioAppending || audioSB.updating || audioSegQueue.length === 0) return;
+                    if (!audioInitAppended && audioInitSegment) {
+                        audioAppending = true;
+                        audioSB.appendBuffer(audioInitSegment);
+                        audioInitAppended = true;
+                        console.log('[MSE] Audio init appended');
+                        return;
+                    }
+                    audioAppending = true;
+                    const seg = audioSegQueue.shift();
+                    try { audioSB.appendBuffer(seg); }
+                    catch(e) {
+                        console.error('[MSE] Audio append error:', e.message);
+                        audioAppending = false;
+                        if (e.name === 'QuotaExceededError') {
+                            console.warn('[MSE] Audio buffer full, evicting...');
+                            pendingEviction = true;
+                            if (!audioSB.updating && !evicting) forceEvictAll();
+                        }
+                    }
+                };
+
+                mediaSource = new MediaSource();
+                this.videoEl.src = URL.createObjectURL(mediaSource);
+
+                mediaSource.addEventListener('sourceopen', () => {
+                    console.log('[MSE] SourceOpen');
+                    try {
+                        videoSB = mediaSource.addSourceBuffer(videoMime);
+                        videoSB.onupdateend = () => { videoAppending = false; evicting = false; if (pendingEviction) { pendingEviction = false; forceEvictAll(); } flushVideo(); };
+
+                        if (audioMime) {
+                            audioSB = mediaSource.addSourceBuffer(audioMime);
+                            audioSB.onupdateend = () => { audioAppending = false; evicting = false; if (pendingEviction) { pendingEviction = false; forceEvictAll(); } flushAudio(); };
+                            console.log('[MSE] Audio SourceBuffer created');
+                        }
+
+                        this.videoEl.onloadeddata = () => {
+                            this.loader.classList.add('hidden');
+                            this.videoEl.play().catch(() => {});
+                            this.resumeIfPossible();
+                        };
+                        this.videoEl.oncanplay = () => {
+                            this.loader.classList.add('hidden');
+                        };
+                        this.videoEl.onerror = () => {
+                            const err = this.videoEl.error;
+                            console.error('[MSE] Video error:', err?.code, err?.message);
+                            this.showErrorMessage('Erro ao reproduzir.');
+                            cleanup();
+                        };
+
+                        evictionTimer = setInterval(() => {
+                            if (aborted) { clearInterval(evictionTimer); return; }
+                            evict(videoSB, false);
+                            if (audioSB) evict(audioSB, false);
+                        }, 2000);
+                        this._mseEvictionTimer = evictionTimer;
+
+                        flushVideo();
+                        flushAudio();
+                    } catch(e) {
+                        console.error('[MSE] sourceopen error:', e.message);
+                        this.showErrorMessage('Erro ao configurar player.');
+                        cleanup();
+                    }
+                });
+
+                mediaSource.addEventListener('error', () => {
+                    console.error('[MSE] MediaSource error');
+                    cleanup();
+                });
+            };
+
+            mp4boxFile.onError = (e) => {
+                console.error('[MSE] MP4Box error:', e);
+            };
+
+            console.log('[MSE] Starting fetch...');
+            this.mseAbortController = new AbortController();
+            let chunkCount = 0;
+
+            const waitForDrain = () => {
+                if (videoSegQueue.length < 15 && audioSegQueue.length < 15) return Promise.resolve();
+                console.log('[MSE] Throttling fetch: vq:', videoSegQueue.length, 'aq:', audioSegQueue.length);
+                return new Promise(resolve => {
+                    const check = () => {
+                        if (aborted || (videoSegQueue.length < 5 && audioSegQueue.length < 5)) resolve();
+                        else setTimeout(check, 100);
+                    };
+                    check();
+                });
+            };
+
+            let ready = false;
+            let fedBytes = 0;
+            const watchdog = setInterval(() => {
+                if (aborted || ready) { clearInterval(watchdog); return; }
+                if (fedBytes > 60 * 1024 * 1024) {
+                    console.error('[MSE] No moov after 60MB — aborting');
+                    this.showErrorMessage('Formato nao suportado (sem moov/MP4).');
+                    cleanup();
+                    clearInterval(watchdog);
+                }
+            }, 3000);
+            this._mseWatchdog = watchdog;
+
+            fetch(url, { signal: this.mseAbortController.signal }).then((response) => {
+                if (!response.ok) throw new Error('HTTP ' + response.status);
+                const ctype = (response.headers.get('content-type') || '').toLowerCase();
+                if (ctype.includes('matroska') || ctype.includes('mkv')) {
+                    console.error('[MSE] MKV content-type detected — attempting mpegts fallback');
+                    cleanup();
+                    this.tryMkvFallback(url);
+                    return;
+                }
+                const reader = response.body.getReader();
+                let firstChunk = true;
+                const pump = () => {
+                    return reader.read().then(({ done, value }) => {
+                        if (done || aborted) {
+                            console.log('[MSE] Fetch complete, segments queued:', videoSegQueue.length);
+                            if (mp4boxFile) { try { mp4boxFile.flush(); } catch(e) {} }
+                            return;
+                        }
+                        if (firstChunk) {
+                            firstChunk = false;
+                            if (value.length >= 4 && value[0] === 0x1A && value[1] === 0x45 && value[2] === 0xDF && value[3] === 0xA3) {
+                                console.error('[MSE] EBML/MKV magic detected — attempting mpegts fallback');
+                                cleanup();
+                                this.tryMkvFallback(url);
+                                return;
+                            }
+                        }
+                        const buf = new ArrayBuffer(value.byteLength);
+                        new Uint8Array(buf).set(value);
+                        try {
+                            buf.fileStart = fileOffset;
+                            mp4boxFile.appendBuffer(buf);
+                            fileOffset += value.byteLength;
+                            fedBytes = fileOffset;
+                            chunkCount++;
+                            if (chunkCount % 100 === 0) {
+                                console.log('[MSE] Fed', chunkCount, 'chunks,', fileOffset, 'bytes, vq:', videoSegQueue.length, 'aq:', audioSegQueue.length);
+                            }
+                        } catch(e) {
+                            console.error('[MSE] mp4box error:', e?.message || e, 'offset:', fileOffset);
+                        }
+                        return waitForDrain().then(pump);
+                    });
+                };
+                return pump();
+            }).catch((e) => {
+                if (e.name === 'AbortError' || aborted) return;
+                console.error('[MSE] Fetch error:', e.message);
+                const corsFail = /Failed to fetch|NetworkError|CORS/i.test(e.message || '');
+                this.showErrorMessage(corsFail
+                    ? 'Sem acesso ao stream (CORS/rede). Tente outro filme ou canal.'
+                    : 'Erro ao carregar video.');
+                cleanup();
+            });
+
+        } catch(e) {
+            console.error('[MSE] Init error:', e.message);
+            this.showErrorMessage('Erro ao inicializar player MSE.');
+            cleanup();
         }
     }
 
-    hideError() {
-        if (this.errorBox) this.errorBox.classList.add('hidden');
+    isMkvUrl(u) {
+        return /\.mkv(\?|$)/i.test(u || this.currentUrl || '');
+    }
+
+    toHlsUrl(u) {
+        if (!u) return u;
+        if (/\.ts(?=\?|$)/i.test(u)) return u.replace(/\.ts(?=\?|$)/i, '.m3u8');
+        return u;
+    }
+
+    showMkvError() {
+        this._inMkvFallback = false;
+        this.showErrorMessage('Não foi possível reproduzir este vídeo (MKV). Formato MKV não suportado pelo navegador.');
+    }
+
+    tryMkvFallback(url) {
+        if (this._mkvMpegtsTried || this._vodMpegtsTried) { this.showMkvError(); return; }
+        if (!(typeof mpegts !== 'undefined' && mpegts.isSupported())) { this.showMkvError(); return; }
+        this._mkvMpegtsTried = true;
+        this._inMkvFallback = true;
+        console.log('[MKV] Native/MSE failed, attempting mpegts...');
+        this.playMpegts(url);
+        if (this._mkvMpegtsTimer) clearTimeout(this._mkvMpegtsTimer);
+        this._mkvMpegtsTimer = setTimeout(() => {
+            if (this.videoEl && this.videoEl.readyState < 2 && this.currentUrl === url) {
+                this.destroyMpegts();
+                this.showMkvError();
+            }
+        }, 10000);
+        const clear = () => { if (this._mkvMpegtsTimer) { clearTimeout(this._mkvMpegtsTimer); this._mkvMpegtsTimer = null; } };
+        this.videoEl.addEventListener('loadedmetadata', clear, { once: true });
+        this.videoEl.addEventListener('playing', clear, { once: true });
+    }
+
+    updateBandwidthDisplay(bps) {
+        const el = document.getElementById('player-bandwidth');
+        if (!el || !bps) return;
+        el.textContent = bps >= 1000000 ? (bps / 1000000).toFixed(1) + ' Mbps' : Math.round(bps / 1000) + ' kbps';
+    }
+
+    playDirect(url) {
+        this.loader.classList.remove('hidden');
+        this.videoEl.src = url;
+        this.videoEl.load();
+        this.videoEl.onloadeddata = () => {
+            this.loader.classList.add('hidden');
+            this.videoEl.play().catch(() => {});
+            this.populateNativeSubtitles();
+            this.populateNativeQualityInfo();
+        };
+        this.videoEl.oncanplay = () => {
+            if (!this.loader.classList.contains('hidden')) {
+                this.loader.classList.add('hidden');
+                this.videoEl.play().catch(() => {});
+            }
+        };
+        this.videoEl.onerror = () => {
+            const err = this.videoEl.error;
+            console.warn('[DIRECT] Error:', err?.code, err?.message);
+            if (!this.loader.classList.contains('hidden')) {
+                this.showErrorMessage('Erro ao carregar video.');
+            }
+        };
+    }
+
+    playNativeHLS(url) {
+        this.videoEl.src = url;
+        this.videoEl.addEventListener('loadedmetadata', () => {
+            this.loader.classList.add('hidden');
+            this.videoEl.play().catch(() => {});
+            this.resumeIfPossible();
+            this.populateNativeSubtitles();
+            this.populateNativeQualityInfo();
+        }, { once: true });
+        this.videoEl.addEventListener('error', () => {
+            this.showErrorMessage('Erro ao carregar stream');
+        }, { once: true });
+    }
+
+    destroyMpegts() {
+        if (this.mpegtsPlayer) {
+            try {
+                this.mpegtsPlayer.pause();
+                this.mpegtsPlayer.unload();
+                this.mpegtsPlayer.detachMediaElement();
+                this.mpegtsPlayer.destroy();
+            } catch(e) {}
+            this.mpegtsPlayer = null;
+        }
+    }
+
+    showErrorMessage(msg) {
+        this.loader.classList.add('hidden');
+        this.errorText.textContent = msg;
+        this.errorBox.classList.remove('hidden');
     }
 
     retry() {
-        this.hideError();
-        this.play(this.currentUrl, this.currentTitle, this.currentType);
+        this.errorBox.classList.add('hidden');
+        this.retryCount++;
+        this.mediaRecoverCount = 0;
+        this.playAttempt = 0;
+        this._mkvMpegtsTried = false;
+        this._vodMpegtsTried = false;
+        this._inMkvFallback = false;
+        if (this._mkvMpegtsTimer) { clearTimeout(this._mkvMpegtsTimer); this._mkvMpegtsTimer = null; }
+        this.loader.classList.remove('hidden');
+        this.startStream(this.currentUrl);
     }
 
     togglePlay() {
+        if (!this.videoEl) return;
         if (this.videoEl.paused) {
             this.videoEl.play().catch(() => {});
-            this.btnPlayPause.innerHTML = '<i class="fas fa-pause"></i>';
+            if (this.btnPlayPause) this.btnPlayPause.innerHTML = '<i class="fas fa-pause"></i>';
         } else {
             this.videoEl.pause();
-            this.btnPlayPause.innerHTML = '<i class="fas fa-play"></i>';
+            if (this.btnPlayPause) this.btnPlayPause.innerHTML = '<i class="fas fa-play"></i>';
         }
+        this.updateCenterPlayBtn();
     }
 
     toggleFullscreen() {
+        const el = this.container;
         if (!document.fullscreenElement) {
-            this.container.requestFullscreen?.().catch(() => {});
-            this.container.classList.add('fullscreen');
+            el.requestFullscreen?.().catch(() => {});
         } else {
             document.exitFullscreen?.();
-            this.container.classList.remove('fullscreen');
         }
     }
 
     toggleMute() {
         this.videoEl.muted = !this.videoEl.muted;
-        this.btnMute.innerHTML = this.videoEl.muted ?
-            '<i class="fas fa-volume-mute"></i>' :
-            '<i class="fas fa-volume-up"></i>';
+        if (this.btnMute) this.btnMute.innerHTML = this.videoEl.muted ? '<i class="fas fa-volume-mute"></i>' : '<i class="fas fa-volume-up"></i>';
     }
 
     setVolume(val) {
         this.videoEl.volume = val / 100;
         this.videoEl.muted = val == 0;
-        this.btnMute.innerHTML = this.videoEl.muted ?
-            '<i class="fas fa-volume-mute"></i>' :
-            '<i class="fas fa-volume-up"></i>';
+        if (this.btnMute) this.btnMute.innerHTML = this.videoEl.muted ? '<i class="fas fa-volume-mute"></i>' : '<i class="fas fa-volume-up"></i>';
+    }
+
+    skip(seconds) {
+        if (this.isLive) return;
+        if (!this.videoEl || !isFinite(this.videoEl.duration)) return;
+        this.videoEl.currentTime = Math.max(0, Math.min(this.videoEl.duration, this.videoEl.currentTime + seconds));
+        this.updateTime();
+    }
+
+    updateCenterPlayBtn() {
+        if (!this.btnPlayCenter) return;
+        if (this.videoEl && !this.videoEl.paused) {
+            this.btnPlayCenter.innerHTML = '<i class="fas fa-pause"></i>';
+        } else {
+            this.btnPlayCenter.innerHTML = '<i class="fas fa-play"></i>';
+        }
+    }
+
+    toggleSettings() {
+        if (!this.settingsPanel) return;
+        this.settingsPanel.classList.toggle('hidden');
+    }
+
+    hideSettingsPanel() {
+        if (this.settingsPanel) this.settingsPanel.classList.add('hidden');
+    }
+
+    populateHLSSubtitles() {
+        if (!this.subtitleOptions || !this.hls) return;
+        const tracks = this.hls.subtitleTracks || [];
+        if (tracks.length === 0) {
+            this.subtitleOptions.innerHTML = '<div class="settings-option-text">Nenhuma legenda disponivel</div>';
+            return;
+        }
+        let html = '<div class="settings-option" data-subtitle-track="-1"><span class="settings-option-label">Desligado</span></div>';
+        tracks.forEach((t, i) => {
+            const active = this.hls.subtitleTrack === i;
+            html += '<div class="settings-option' + (active ? ' active' : '') + '" data-subtitle-track="' + i + '"><span class="settings-option-label">' + (t.name || t.lang || 'Legenda ' + (i + 1)) + '</span></div>';
+        });
+        this.subtitleOptions.innerHTML = html;
+        this.subtitleOptions.querySelectorAll('.settings-option').forEach(el => {
+            el.addEventListener('click', () => {
+                const idx = parseInt(el.dataset.subtitleTrack);
+                this.hls.subtitleTrack = idx;
+                this.hls.subtitleDisplay = idx >= 0;
+                this.subtitleOptions.querySelectorAll('.settings-option').forEach(o => o.classList.remove('active'));
+                el.classList.add('active');
+            });
+        });
+    }
+
+    populateHLSAudioTracks() {
+        if (!this.audioOptions || !this.hls) return;
+        const tracks = this.hls.audioTracks || [];
+        if (tracks.length <= 1) {
+            this.audioOptions.innerHTML = '<div class="settings-option active"><span class="settings-option-label">Padrao</span></div>';
+            return;
+        }
+        let html = '';
+        tracks.forEach((t, i) => {
+            const active = this.hls.audioTrack === i;
+            html += '<div class="settings-option' + (active ? ' active' : '') + '" data-audio-track="' + i + '"><span class="settings-option-label">' + (t.name || t.lang || 'Audio ' + (i + 1)) + '</span></div>';
+        });
+        this.audioOptions.innerHTML = html;
+        this.audioOptions.querySelectorAll('.settings-option').forEach(el => {
+            el.addEventListener('click', () => {
+                const idx = parseInt(el.dataset.audioTrack);
+                this.hls.audioTrack = idx;
+                this.audioOptions.querySelectorAll('.settings-option').forEach(o => o.classList.remove('active'));
+                el.classList.add('active');
+            });
+        });
+    }
+
+    populateHLSQualityInfo() {
+        if (!this.qualityOptions || !this.hls) return;
+        let html = '<div class="settings-option-text">HLS Adaptive</div>';
+        const levels = this.hls.levels || [];
+        levels.forEach((l, i) => {
+            const active = this.hls.currentLevel === i;
+            const label = l.height ? l.height + 'p' : 'Nivel ' + i;
+            const bitrate = l.bitrate ? ' (' + Math.round(l.bitrate / 1000) + ' kbps)' : '';
+            html += '<div class="settings-option' + (active ? ' active' : '') + '" data-quality="' + i + '"><span class="settings-option-label">' + label + bitrate + '</span></div>';
+        });
+        html += '<div class="settings-option' + (this.hls.currentLevel === -1 ? ' active' : '') + '" data-quality="-1"><span class="settings-option-label">Automatico</span></div>';
+        this.qualityOptions.innerHTML = html;
+        this.qualityOptions.querySelectorAll('.settings-option').forEach(el => {
+            el.addEventListener('click', () => {
+                const idx = parseInt(el.dataset.quality);
+                this.hls.currentLevel = idx;
+                this.qualityOptions.querySelectorAll('.settings-option').forEach(o => o.classList.remove('active'));
+                el.classList.add('active');
+            });
+        });
+    }
+
+    populateNativeSubtitles() {
+        if (!this.subtitleOptions) return;
+        const tracks = this.videoEl.textTracks;
+        let count = 0;
+        for (let i = 0; i < tracks.length; i++) {
+            if (tracks[i].kind === 'subtitles' || tracks[i].kind === 'captions') count++;
+        }
+        if (count === 0) {
+            this.subtitleOptions.innerHTML = '<div class="settings-option-text">Nenhuma legenda disponivel</div>';
+            return;
+        }
+        let html = '<div class="settings-option active" data-subtitle-track="-1"><span class="settings-option-label">Desligado</span></div>';
+        let idx = 0;
+        for (let i = 0; i < tracks.length; i++) {
+            if (tracks[i].kind === 'subtitles' || tracks[i].kind === 'captions') {
+                const trackIdx = idx;
+                html += '<div class="settings-option" data-subtitle-track="' + trackIdx + '"><span class="settings-option-label">' + (tracks[i].label || tracks[i].language || 'Legenda ' + (trackIdx + 1)) + '</span></div>';
+                idx++;
+            }
+        }
+        this.subtitleOptions.innerHTML = html;
+        this.subtitleOptions.querySelectorAll('.settings-option').forEach(el => {
+            el.addEventListener('click', () => {
+                const targetIdx = parseInt(el.dataset.subtitleTrack);
+                let currentIdx = 0;
+                for (let i = 0; i < tracks.length; i++) {
+                    if (tracks[i].kind === 'subtitles' || tracks[i].kind === 'captions') {
+                        tracks[i].mode = currentIdx === targetIdx ? 'showing' : 'hidden';
+                        currentIdx++;
+                    }
+                }
+                this.subtitleOptions.querySelectorAll('.settings-option').forEach(o => o.classList.remove('active'));
+                el.classList.add('active');
+            });
+        });
+    }
+
+    populateNativeQualityInfo() {
+        if (!this.qualityOptions) return;
+        const src = this.videoEl.src || '';
+        let html = '<div class="settings-option-text">Reproduzindo diretamente</div>';
+        this.qualityOptions.innerHTML = html;
+    }
+
+    populateMSEQualityInfo(info) {
+        if (!this.qualityOptions) return;
+        const vt = info.videoTracks && info.videoTracks[0];
+        let html = '<div class="settings-option-text">MSE Playback</div>';
+        if (vt) {
+            const w = vt.track_width || '';
+            const h = vt.track_height || '';
+            if (w && h) html += '<div class="settings-option-text">' + w + 'x' + h + '</div>';
+            if (vt.bitrate) html += '<div class="settings-option-text">' + Math.round(vt.bitrate / 1000) + ' kbps</div>';
+        }
+        const at = info.audioTracks && info.audioTracks[0];
+        if (at) {
+            const label = at.name || at.language || 'Audio';
+            html += '<div class="settings-option active"><span class="settings-option-label">' + label + '</span></div>';
+        }
+        if (!this.hls) {
+            this.audioOptions.innerHTML = '<div class="settings-option active"><span class="settings-option-label">Padrao</span></div>';
+        }
+        this.qualityOptions.innerHTML = html;
+    }
+
+    onSeekStart(e) {
+        if (this.isLive) return;
+        if (!this.videoEl || !isFinite(this.videoEl.duration)) return;
+        this.seekDragging = true;
+        this.seekToPosition(e);
+    }
+
+    onSeekDragMove(e) {
+        if (!this.seekDragging) return;
+        if (this.isLive) return;
+        this.seekToPosition(e);
+    }
+
+    onSeekDragEnd(e) {
+        if (!this.seekDragging) return;
+        this.seekDragging = false;
+    }
+
+    onSeekHover(e) {
+        if (this.isLive) return;
+        if (!this.seekBarWrapper || !this.seekTooltip) return;
+        if (!isFinite(this.videoEl?.duration)) return;
+        const rect = this.seekBarWrapper.getBoundingClientRect();
+        const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+        const time = pct * this.videoEl.duration;
+        this.seekTooltip.textContent = this.fmt(time);
+        this.seekTooltip.style.left = (pct * 100) + '%';
+        this.seekTooltip.style.opacity = '1';
+    }
+
+    onSeekHoverEnd() {
+        if (this.seekTooltip) this.seekTooltip.style.opacity = '0';
+    }
+
+    seekToPosition(e) {
+        if (!this.seekBarWrapper || !this.videoEl) return;
+        const rect = this.seekBarWrapper.getBoundingClientRect();
+        const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+        if (isFinite(this.videoEl.duration)) {
+            this.videoEl.currentTime = pct * this.videoEl.duration;
+            this.updateTime();
+        }
+    }
+
+    updateSeekUI() {
+        if (this.isLive || !this.videoEl) {
+            if (this.seekProgress) this.seekProgress.style.width = '0%';
+            if (this.seekBuffered) this.seekBuffered.style.width = '0%';
+            if (this.seekThumb) this.seekThumb.style.left = '0%';
+            if (this.timeCurrent) this.timeCurrent.textContent = '';
+            if (this.timeDuration) this.timeDuration.textContent = '';
+            return;
+        }
     }
 
     updateTime() {
-        if (this.isLive || !this.timeDisplay) return;
-        const cur = this.formatTime(this.videoEl.currentTime);
-        const dur = this.formatTime(this.videoEl.duration);
-        this.timeDisplay.textContent = cur + ' / ' + dur;
+        if (this.isLive) {
+            if (this.timeDisplay) this.timeDisplay.textContent = '';
+            this.updateSeekUI();
+            return;
+        }
+        const c = this.videoEl.currentTime || 0;
+        const d = this.videoEl.duration || 0;
+        if (this.timeDisplay) this.timeDisplay.textContent = this.fmt(c) + ' / ' + this.fmt(d);
+        if (this.timeCurrent) this.timeCurrent.textContent = this.fmt(c);
+        if (this.timeDuration) this.timeDuration.textContent = this.fmt(d);
+
+        if (this.seekProgress && isFinite(d) && d > 0) {
+            this.seekProgress.style.width = ((c / d) * 100) + '%';
+        }
+        if (this.seekThumb && isFinite(d) && d > 0) {
+            this.seekThumb.style.left = ((c / d) * 100) + '%';
+        }
+
+        if (this.seekBuffered && this.videoEl.buffered.length > 0 && isFinite(d) && d > 0) {
+            const buffEnd = this.videoEl.buffered.end(this.videoEl.buffered.length - 1);
+            this.seekBuffered.style.width = ((buffEnd / d) * 100) + '%';
+        }
+
+        this.updateCenterPlayBtn();
     }
 
-    formatTime(sec) {
-        if (isNaN(sec)) return '0:00';
-        const h = Math.floor(sec / 3600);
-        const m = Math.floor((sec % 3600) / 60);
-        const s = Math.floor(sec % 60);
-        if (h > 0) return `${h}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
-        return `${m}:${s.toString().padStart(2,'0')}`;
-    }
-
-    showControlsTemporarily() {
-        if (!this.controls) return;
-        this.controls.style.opacity = '1';
-        clearTimeout(this.controlsTimeout);
-        this.controlsTimeout = setTimeout(() => {
-            if (!this.videoEl.paused) {
-                this.controls.style.opacity = '0';
-            }
-        }, 3000);
+    fmt(s) {
+        if (isNaN(s)) return '0:00';
+        const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = Math.floor(s % 60);
+        return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}` : `${m}:${String(sec).padStart(2, '0')}`;
     }
 
     stop() {
+        this.stopProgressSaver();
         this.cleanup();
+        this.currentStreamId = null;
+        this.resumeAt = 0;
         this.container.classList.add('hidden');
         document.body.style.overflow = '';
     }
 
     cleanup() {
-        this.hideLoader();
-        this.hideError();
+        if (!this.isLive && this.currentStreamId != null && this.videoEl && isFinite(this.videoEl.duration) && this.videoEl.duration > 0 && typeof WatchStore !== 'undefined') {
+            WatchStore.saveProgress(this.currentType, this.currentStreamId, this.videoEl.currentTime, this.videoEl.duration, this.currentTitle);
+        }
+        this.stopProgressSaver();
+        this._pendingResume = 0;
+        this.resumeAt = 0;
+        if (this._mseEvictionTimer) { clearInterval(this._mseEvictionTimer); this._mseEvictionTimer = null; }
+        if (this.mseFallbackTimer) { clearTimeout(this.mseFallbackTimer); this.mseFallbackTimer = null; }
+        if (this._mkvMpegtsTimer) { clearTimeout(this._mkvMpegtsTimer); this._mkvMpegtsTimer = null; }
+        this._inMkvFallback = false;
+        if (this.mseAbortController) { this.mseAbortController.abort(); this.mseAbortController = null; }
+        this.loader.classList.add('hidden');
+        this.errorBox.classList.add('hidden');
         if (this.videoEl) {
+            try { if (window.SubtitleStore) SubtitleStore.clearTracks(this.videoEl); } catch (e) {}
             this.videoEl.pause();
             this.videoEl.removeAttribute('src');
             this.videoEl.load();
         }
-        if (this.hls) { this.hls.destroy(); this.hls = null; }
-        if (this.mpegts) {
-            try { this.mpegts.pause(); this.mpegts.unload(); this.mpegts.detachMediaElement(); this.mpegts.destroy(); } catch(e) {}
-            this.mpegts = null;
-        }
-        if (this.dashPlayer) { try { this.dashPlayer.reset(); } catch(e) {} this.dashPlayer = null; }
+        if (this.hls) { try { this.hls.destroy(); } catch (e) {} this.hls = null; }
+        this.destroyMpegts();
         if (this.btnPlayPause) this.btnPlayPause.innerHTML = '<i class="fas fa-play"></i>';
-        clearTimeout(this.controlsTimeout);
+        this.updateCenterPlayBtn();
+        this.hideSettingsPanel();
+        this.hideResumeModal();
+        this.updateSeekUI();
     }
 }
 

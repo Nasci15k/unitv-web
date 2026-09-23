@@ -1,12 +1,16 @@
 {
   "name": "unitv-web",
-  "version": "1.0.0",
-  "description": "UniTV IPTV Player - Web Clone",
+  "version": "1.1.0",
+  "description": "OpenTv — Player IPTV Web (clone UniTV) + Supabase auth",
   "main": "proxy.js",
   "scripts": {
     "start": "node proxy.js",
-    "proxy": "node proxy.js"
+    "server": "node proxy.js",
+    "test": "node --check js/api.js && node --check js/player.js && node --check js/app.js && node --check js/supabase-client.js && node --check js/admin.js && node --check js/settings.js && node --check js/i18n.js && node --check js/subtitles.js && node --check js/image-guard.js"
   },
-  "keywords": ["iptv", "player", "xtream"],
-  "license": "MIT"
+  "keywords": ["iptv", "player", "xtream", "supabase", "netlify"],
+  "license": "MIT",
+  "dependencies": {
+    "playwright": "^1.63.0"
+  }
 }

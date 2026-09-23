@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 300" width="200" height="300">
+  <rect width="200" height="300" rx="16" fill="#16162a"/>
+  <rect x="8" y="8" width="184" height="284" rx="12" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="2"/>
+  <circle cx="100" cy="130" r="46" fill="#0e0e16" stroke="rgba(233,69,96,0.5)" stroke-width="3"/>
+  <path d="M88 112 L116 130 L88 148 Z" fill="#e94560"/>
+  <text x="100" y="210" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" font-weight="bold" fill="rgba(255,255,255,0.5)">OT</text>
+  <text x="100" y="240" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="rgba(255,255,255,0.3)">Sem imagem</text>
+</svg>

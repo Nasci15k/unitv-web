@@ -3,3 +3,13 @@ node_modules/
 .DS_Store
 Thumbs.db
 *.log
+*.png
+proxy-err.txt
+proxy-out.txt
+server-err.txt
+server-out.txt
+.playwright-mcp/
+cd
+node
+npm
+unitv-web@1.0.0

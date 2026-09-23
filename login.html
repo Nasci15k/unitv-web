@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="supabase-url" content="https://figvurwbnocrzoupvtgs.supabase.co">
+    <meta name="supabase-anon" content="sb_publishable_MRl6mB27qtXrDMyF9obwUg_vYtSNh7f">
+    <title>Entrar — OpenTv</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23e94560'/><text x='50' y='68' font-size='50' font-weight='bold' text-anchor='middle' fill='white' font-family='Arial'>OT</text></svg>">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+        :root{--accent:#e94560;--bg:#0b0d17;--bg2:#141726;--bg3:#1c2033;--text:#fff;--text2:rgba(255,255,255,.65);--text3:rgba(255,255,255,.38);--border:rgba(255,255,255,.08);--ok:#10b981;--err:#ef4444;--warn:#f59e0b;--font:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
+        html,body{height:100%}
+        body{font-family:var(--font);background:var(--bg);color:var(--text);display:flex;align-items:center;justify-content:center;padding:24px;overflow:auto}
+        body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 70% 45% at 25% -10%,rgba(233,69,96,.12),transparent),radial-gradient(ellipse 55% 40% at 85% 110%,rgba(124,58,237,.1),transparent);pointer-events:none}
+        .card{position:relative;width:100%;max-width:400px;background:rgba(20,23,38,.92);border:1px solid var(--border);border-radius:18px;padding:34px 30px;box-shadow:0 16px 60px rgba(0,0,0,.5)}
+        .logo{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:6px}
+        .logo svg{width:40px;height:40px;filter:drop-shadow(0 0 18px rgba(233,69,96,.35))}
+        .logo h1{font-size:26px;font-weight:900;letter-spacing:-.5px}
+        .logo h1 span{background:linear-gradient(135deg,#e94560,#7c3aed);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+        .sub{text-align:center;color:var(--text3);font-size:13px;margin-bottom:24px}
+        .tabs{display:flex;background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:4px;margin-bottom:22px}
+        .tab{flex:1;padding:10px 8px;border:none;background:none;color:var(--text3);font-family:var(--font);font-size:13px;font-weight:600;border-radius:9px;cursor:pointer;transition:all .2s}
+        .tab.active{background:var(--accent);color:#fff;box-shadow:0 4px 14px rgba(233,69,96,.35)}
+        form{display:flex;flex-direction:column;gap:13px}
+        .field label{display:block;font-size:12px;font-weight:600;color:var(--text2);margin-bottom:6px}
+        .field input{width:100%;padding:12px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:14px;font-family:var(--font);transition:all .2s}
+        .field input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(233,69,96,.15)}
+        .field input::placeholder{color:var(--text3)}
+        .btn{margin-top:6px;padding:13px;background:linear-gradient(135deg,#e94560,#7c3aed);border:none;border-radius:50px;color:#fff;font-size:14px;font-weight:700;font-family:var(--font);cursor:pointer;transition:all .25s}
+        .btn:hover{transform:translateY(-2px);box-shadow:0 8px 26px rgba(233,69,96,.4)}
+        .btn:disabled{opacity:.55;cursor:not-allowed;transform:none;box-shadow:none}
+        .msg{display:none;padding:11px 13px;border-radius:10px;font-size:13px;line-height:1.45;margin-bottom:12px}
+        .msg.show{display:block}
+        .msg.err{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:#fca5a5}
+        .msg.ok{background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3);color:#6ee7b7}
+        .msg.warn{background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);color:#fcd34d}
+        .hidden{display:none!important}
+        .back{display:block;text-align:center;margin-top:20px;color:var(--text3);font-size:13px;text-decoration:none;transition:color .2s}
+        .back:hover{color:var(--accent)}
+        .hint{text-align:center;margin-top:14px;font-size:11.5px;color:var(--text3);line-height:1.5}
+    </style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">
+    <svg viewBox="0 0 40 40" width="40" height="40"><rect width="40" height="40" rx="10" fill="url(#lg)"/><path d="M14 14 L20 20 L14 26" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M22 14 L28 20 L22 26" stroke="rgba(255,255,255,.45)" stroke-width="3" fill="none" stroke-linecap="round"/><defs><linearGradient id="lg" x1="0" y1="0" x2="40" y2="40"><stop offset="0%" stop-color="#e94560"/><stop offset="100%" stop-color="#7c3aed"/></linearGradient></defs></svg>
+    <h1>Open<span>Tv</span></h1>
+  </div>
+  <p class="sub">Entre ou crie sua conta (aprovação necessária)</p>
+  <div class="tabs">
+    <button type="button" class="tab active" data-tab="signin">Entrar</button>
+    <button type="button" class="tab" data-tab="signup">Criar conta</button>
+  </div>
+  <div id="msg" class="msg err" role="alert"></div>
+  <form id="form-signin" novalidate>
+    <div class="field"><label for="si-email">E-mail</label><input id="si-email" type="email" required autocomplete="email" placeholder="voce@email.com"></div>
+    <div class="field"><label for="si-pass">Senha</label><input id="si-pass" type="password" required autocomplete="current-password" placeholder="••••••••"></div>
+    <button class="btn" type="submit" id="btn-signin">Entrar</button>
+  </form>
+  <form id="form-signup" class="hidden" novalidate>
+    <div class="field"><label for="su-name">Nome</label><input id="su-name" type="text" autocomplete="name" placeholder="Seu nome"></div>
+    <div class="field"><label for="su-email">E-mail</label><input id="su-email" type="email" required autocomplete="email" placeholder="voce@email.com"></div>
+    <div class="field"><label for="su-pass">Senha (mín. 6)</label><input id="su-pass" type="password" required minlength="6" autocomplete="new-password" placeholder="••••••••"></div>
+    <div class="field"><label for="su-pass2">Confirmar senha</label><input id="su-pass2" type="password" required minlength="6" autocomplete="new-password" placeholder="••••••••"></div>
+    <button class="btn" type="submit" id="btn-signup">Criar conta</button>
+  </form>
+  <a class="back" href="index.html">← Voltar ao player</a>
+  <p class="hint" id="auth-mode-hint"></p>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/supabase-client.js"></script>
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var tabs = document.querySelectorAll('.tab');
+  var formSignin = $('form-signin');
+  var formSignup = $('form-signup');
+  var msgEl = $('msg');
+  var btnSignin = $('btn-signin');
+  var btnSignup = $('btn-signup');
+
+  function flash(type, text) {
+    msgEl.className = 'msg show ' + (type || 'err');
+    msgEl.textContent = text || '';
+  }
+  function clearMsg() {
+    msgEl.className = 'msg err';
+    msgEl.textContent = '';
+  }
+  function setBusy(btn, on, label) {
+    btn.disabled = !!on;
+    btn.textContent = on ? 'Aguarde...' : label;
+  }
+  function switchTab(name) {
+    tabs.forEach(function (t) {
+      t.classList.toggle('active', t.dataset.tab === name);
+    });
+    formSignin.classList.toggle('hidden', name !== 'signin');
+    formSignup.classList.toggle('hidden', name !== 'signup');
+    clearMsg();
+  }
+  function nextUrl() {
+    try {
+      var q = new URLSearchParams(location.search);
+      var n = q.get('next');
+      if (n && /^[\w./-]+$/.test(n)) return n;
+    } catch (e) {}
+    return 'index.html';
+  }
+  function afterLogin() {
+    var p = AuthStore.getProfile();
+    var st = (p && p.status) || 'approved';
+    var role = p && p.role;
+    if (st === 'rejected') {
+      flash('err', 'Sua conta foi recusada. Fale com o administrador.');
+      AuthStore.signOut();
+      setBusy(btnSignin, false, 'Entrar');
+      return;
+    }
+    if (st === 'pending' && role !== 'admin') {
+      flash('warn', 'Conta criada! Aguarde a aprovação de um administrador para usar o app.');
+      setBusy(btnSignin, false, 'Entrar');
+      return;
+    }
+    location.href = nextUrl();
+  }
+
+  tabs.forEach(function (t) {
+    t.addEventListener('click', function () { switchTab(t.dataset.tab); });
+  });
+
+  if (AuthStore.isDemo()) {
+    $('auth-mode-hint').textContent = 'Modo demo local (Supabase offline).';
+  }
+
+  AuthStore.init().then(function () {
+    if (AuthStore.isAuthenticated()) {
+      var p = AuthStore.getProfile();
+      var st = (p && p.status) || 'approved';
+      if (st === 'pending' && (!p || p.role !== 'admin')) {
+        flash('warn', 'Conta aguardando aprovação de um administrador.');
+        return;
+      }
+      if (st === 'rejected') {
+        flash('err', 'Conta recusada.');
+        AuthStore.signOut();
+        return;
+      }
+      location.href = nextUrl();
+    }
+  }).catch(function () {});
+
+  formSignin.addEventListener('submit', function (e) {
+    e.preventDefault();
+    clearMsg();
+    var email = $('si-email').value.trim();
+    var pass = $('si-pass').value;
+    if (!email || !pass) { flash('err', 'Preencha e-mail e senha.'); return; }
+    setBusy(btnSignin, true, 'Entrar');
+    AuthStore.signIn(email, pass)
+      .then(function () { afterLogin(); })
+      .catch(function (err) {
+        flash('err', (err && err.message) || 'Falha ao entrar.');
+        setBusy(btnSignin, false, 'Entrar');
+      });
+  });
+
+  formSignup.addEventListener('submit', function (e) {
+    e.preventDefault();
+    clearMsg();
+    var name = $('su-name').value.trim();
+    var email = $('su-email').value.trim();
+    var pass = $('su-pass').value;
+    var pass2 = $('su-pass2').value;
+    if (!email || !pass) { flash('err', 'Preencha e-mail e senha.'); return; }
+    if (pass.length < 6) { flash('err', 'A senha precisa de pelo menos 6 caracteres.'); return; }
+    if (pass !== pass2) { flash('err', 'As senhas não conferem.'); return; }
+    setBusy(btnSignup, true, 'Criar conta');
+    AuthStore.signUp(email, pass, name)
+      .then(function (res) {
+        if (res && res.needsConfirm) {
+          flash('ok', 'Conta criada! Confirme o e-mail e depois faça login. Aguarde aprovação do admin.');
+          switchTab('signin');
+          setBusy(btnSignup, false, 'Criar conta');
+          return;
+        }
+        var p = AuthStore.getProfile();
+        if (p && p.status === 'pending') {
+          flash('ok', 'Conta criada com sucesso! Aguarde a aprovação de um administrador.');
+          switchTab('signin');
+          setBusy(btnSignup, false, 'Criar conta');
+          return;
+        }
+        flash('ok', 'Conta criada!');
+        location.href = nextUrl();
+      })
+      .catch(function (err) {
+        flash('err', (err && err.message) || 'Falha ao criar conta.');
+        setBusy(btnSignup, false, 'Criar conta');
+      });
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="supabase-url" content="https://figvurwbnocrzoupvtgs.supabase.co">
+  <meta name="supabase-anon" content="sb_publishable_MRl6mB27qtXrDMyF9obwUg_vYtSNh7f">
+  <title>Painel ADM — OpenTv</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23e94560'/><text x='50' y='68' font-size='50' font-weight='bold' text-anchor='middle' fill='white' font-family='Arial'>OT</text></svg>">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+  <div class="layout">
+    <aside class="side">
+      <div class="brand">Open<span>Tv</span> <em>ADM</em></div>
+      <nav>
+        <button class="nav-a active" data-view="painel"><i class="fas fa-chart-line"></i> Painel</button>
+        <button class="nav-a" data-view="users"><i class="fas fa-users"></i> Usuários</button>
+        <button class="nav-a" data-view="settings"><i class="fas fa-sliders-h"></i> Configurações</button>
+        <button class="nav-a" data-view="content"><i class="fas fa-photo-video"></i> Conteúdo</button>
+        <a class="nav-a" href="index.html"><i class="fas fa-play"></i> Player</a>
+        <button class="nav-a danger" id="btn-adm-logout"><i class="fas fa-sign-out-alt"></i> Sair</button>
+      </nav>
+    </aside>
+    <main class="main">
+      <header class="top">
+        <h1 id="view-title">Painel</h1>
+        <div class="who" id="who">…</div>
+      </header>
+      <section id="view-painel" class="view">
+        <div class="kpis">
+          <div class="kpi"><div class="k" id="kpi-users">—</div><div class="l">Usuários</div></div>
+          <div class="kpi"><div class="k" id="kpi-admins">—</div><div class="l">Admins</div></div>
+          <div class="kpi"><div class="k" id="kpi-pending">—</div><div class="l">Pendentes</div></div>
+          <div class="kpi"><div class="k" id="kpi-approved">—</div><div class="l">Aprovados</div></div>
+        </div>
+        <div class="card">
+          <h2>Acesso rápido</h2>
+          <p class="hint">Novos cadastros ficam <strong>pendentes</strong>. Aprove em Usuários.</p>
+          <p class="hint">Admin via SQL (se precisar):</p>
+          <pre>update public.profiles set role='admin', status='approved' where email='SEU_EMAIL';</pre>
+        </div>
+      </section>
+      <section id="view-users" class="view hidden">
+        <div class="card">
+          <div class="row"><h2>Usuários</h2><button id="btn-reload-users" class="btn">Atualizar</button></div>
+          <div id="users-msg" class="msg hidden"></div>
+          <div class="filters-row">
+            <button class="btn sm filter-users active" data-filter="all">Todos</button>
+            <button class="btn sm filter-users" data-filter="pending">Pendentes</button>
+            <button class="btn sm filter-users" data-filter="approved">Aprovados</button>
+            <button class="btn sm filter-users" data-filter="rejected">Recusados</button>
+          </div>
+          <table class="tbl">
+            <thead><tr><th>E-mail</th><th>Nome</th><th>Papel</th><th>Status</th><th>Criado</th><th>Ações</th></tr></thead>
+            <tbody id="users-body"><tr><td colspan="6">Carregando…</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+      <section id="view-settings" class="view hidden">
+        <div class="card">
+          <h2>Configurações do site</h2>
+          <label>Nome do site<input id="set-site" type="text" value="OpenTv"></label>
+          <label>Idioma padrão
+            <select id="set-lang"><option value="pt">Português</option><option value="en">English</option><option value="es">Español</option></select>
+          </label>
+          <label>Tamanho de legenda
+            <select id="set-sub-size"><option value="0.8">Pequena</option><option value="1">Média</option><option value="1.4">Grande</option></select>
+          </label>
+          <button id="btn-save-site" class="btn primary">Salvar</button>
+          <div id="settings-msg" class="msg hidden"></div>
+        </div>
+      </section>
+      <section id="view-content" class="view hidden">
+        <div class="card">
+          <h2>Conteúdo</h2>
+          <p class="hint">Catálogo Xtream (telefunplay) — contagem local do player:</p>
+          <ul>
+            <li>TV ao vivo, Filmes e Séries carregam em <a href="index.html">index.html</a></li>
+            <li>Filtros, favoritos, parental e EPG no app principal</li>
+          </ul>
+          <p class="hint">Edge function <code>xtream</code> opcional esconde credenciais no deploy.</p>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabase-client.js"></script>
+  <script src="js/admin.js"></script>
+</body>
+</html>
