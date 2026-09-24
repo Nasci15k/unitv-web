@@ -1,4 +1,4 @@
-﻿class VideoPlayer {
+class VideoPlayer {
     constructor() {
         this.hls = null;
         this.mpegtsPlayer = null;

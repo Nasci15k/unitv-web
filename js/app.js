@@ -1,4 +1,4 @@
-﻿document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', () => {
     const $ = (id) => document.getElementById(id);
     const appEl = $('app');
     const authGate = $('auth-gate');
