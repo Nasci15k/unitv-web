@@ -6,7 +6,7 @@
     <meta name="supabase-url" content="https://figvurwbnocrzoupvtgs.supabase.co">
     <meta name="supabase-anon" content="sb_publishable_MRl6mB27qtXrDMyF9obwUg_vYtSNh7f">
     <title>OpenTv — Player IPTV</title>
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23e94560'/><text x='50' y='68' font-size='50' font-weight='bold' text-anchor='middle' fill='white' font-family='Arial'>OT</text></svg>">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23e50914'/><text x='50' y='68' font-size='50' font-weight='bold' text-anchor='middle' fill='white' font-family='Arial'>OT</text></svg>">
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="preconnect" href="https://cdn.jsdelivr.net">
@@ -42,7 +42,7 @@
     <div id="app" style="display:none;">
         <nav id="sidebar" class="sidebar">
             <div class="sidebar-logo">
-                <svg viewBox="0 0 32 32" width="32" height="32"><rect width="32" height="32" rx="8" fill="url(#sg)"/><path d="M10 10 L16 16 L10 22" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M17 10 L23 16 L17 22" stroke="rgba(255,255,255,0.5)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/><defs><linearGradient id="sg" x1="0" y1="0" x2="32" y2="32"><stop offset="0%" stop-color="#e94560"/><stop offset="100%" stop-color="#7c3aed"/></linearGradient></defs></svg>
+                <svg viewBox="0 0 32 32" width="30" height="30"><rect width="32" height="32" rx="8" fill="url(#sg)"/><path d="M10 10 L16 16 L10 22" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M17 10 L23 16 L17 22" stroke="rgba(255,255,255,0.5)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/><defs><linearGradient id="sg" x1="0" y1="0" x2="32" y2="32"><stop offset="0%" stop-color="#e50914"/><stop offset="100%" stop-color="#ff3341"/></linearGradient></defs></svg>
                 <span>Open<span style="color:var(--accent)">Tv</span></span>
             </div>
             <ul class="nav-menu">
@@ -105,6 +105,7 @@
                                 <div class="epg-progress"><div id="epg-progress-bar" class="epg-progress-fill"></div></div>
                                 <span id="epg-time-left" class="epg-time-left"></span>
                                 <span id="epg-clock" class="epg-clock"></span>
+                                <button id="epg-full-btn" class="epg-action-btn" title="Programação completa"><i class="fas fa-list-ul"></i></button>
                                 <button id="epg-reserve-btn" class="epg-action-btn" title="Reservar programa"><i class="fas fa-star"></i></button>
                                 <button id="epg-timeshift-btn" class="epg-action-btn hidden" title="Assistir do inicio"><i class="fas fa-history"></i></button>
                             </div>
@@ -434,6 +435,21 @@
         </div>
     </div>
 
+    <!-- EPG Modal (Programação) -->
+    <div id="epg-modal" class="modal-overlay hidden">
+        <div class="modal-box epg-box">
+            <button class="modal-close" id="btn-close-epg"><i class="fas fa-times"></i></button>
+            <div class="epg-modal-head">
+                <img id="epg-modal-ch-logo" class="epg-modal-logo" src="" alt="" onerror="this.style.display='none'">
+                <div>
+                    <div class="epg-modal-title" id="epg-modal-ch-name"></div>
+                    <div class="epg-modal-date" id="epg-modal-date"></div>
+                </div>
+            </div>
+            <div class="epg-list" id="epg-list"></div>
+        </div>
+    </div>
+
     <!-- Mobile bottom navigation -->
     <nav class="bottom-nav" id="bottom-nav">
         <li class="nav-item" data-section="destaques"><i class="fas fa-star"></i><span>Destaques</span></li>
@@ -443,6 +459,7 @@
         <li class="nav-item" data-section="search"><i class="fas fa-search"></i><span>Buscar</span></li>
     </nav>
 
+    <script src="js/config.js"></script>
     <script src="js/api.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="js/supabase-client.js"></script>

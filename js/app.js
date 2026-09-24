@@ -24,6 +24,50 @@
             return u.href;
         } catch (e) { return PLACEHOLDER_IMG; }
     }
+    function rating10(it) {
+        if (!it) return null;
+        const r5 = Number(it.rating_5based);
+        if (r5 > 0) return Math.round(r5 * 2 * 10) / 10;
+        const r = Number(it.rating);
+        return r > 0 ? r : null;
+    }
+    function decodeEpgText(s) {
+        if (!s) return '';
+        if (!/^[A-Za-z0-9+/=\s]+$/.test(String(s).substring(0, 100))) return s;
+        try { return decodeURIComponent(escape(atob(String(s).replace(/\s+/g, '')))); }
+        catch (e) { return s; }
+    }
+    function trailerUrl(title) {
+        return 'https://www.youtube.com/results?search_query=' + encodeURIComponent((title || '') + ' trailer oficial');
+    }
+    const OMDB_KEY = (window.OPENTV_CONFIG && window.OPENTV_CONFIG.OMDB_API_KEY) || '';
+    const omdbCache = new Map();
+    async function omdbLookup(title, year) {
+        if (!OMDB_KEY || !title) return null;
+        const key = title + '|' + (year || '');
+        if (omdbCache.has(key)) return omdbCache.get(key);
+        try {
+            const u = 'https://www.omdbapi.com/?apikey=' + OMDB_KEY + '&t=' + encodeURIComponent(title.replace(/\s*\(\d{4}\)\s*$/, '')) + (year ? '&y=' + year : '');
+            const res = await fetch(u);
+            const j = await res.json();
+            const out = (j && j.Response === 'True') ? j : null;
+            omdbCache.set(key, out);
+            return out;
+        } catch (e) { omdbCache.set(key, null); return null; }
+    }
+    function qualityBadge(name) {
+        const n = String(name || '').toUpperCase();
+        if (/4K|2160/.test(n)) return '4K';
+        if (/\bFHD\b|1080/.test(n)) return 'FHD';
+        if (/\bHD\b|720/.test(n)) return 'HD';
+        if (/\bSD\b/.test(n)) return 'SD';
+        return null;
+    }
+    function cleanEpTitle(t, epNum) {
+        if (!t) return 'Episódio ' + epNum;
+        let s = String(t).replace(/^S\d+\s*E\d+\s*-\s*/i, '').replace(/\s*S\d+E\d+\s*$/i, '').trim();
+        return s || 'Episódio ' + epNum;
+    }
     const state = { section: 'live', allLive: [], allMovies: [], allSeries: [], liveCats: [], vodCats: [], seriesCats: [], moviesPage: 1, seriesPage: 1, movieSection: 'general', seriesSection: 'general', liveSection: 'general', movieFilterMode: 'todos', seriesFilterMode: 'todos', movieGenre: '', movieYear: '', seriesGenre: '', seriesYear: '', movieCat: '', seriesCat: '', favTab: 'favorites', searchType: '', historyDeleteMode: false, adultUnlocked: false, currentEpg: null, jogosLoaded: false, jogosDateIdx: 0, jogosGames: [], jogosComps: {}, jogosCountries: {}, filterSel: { tipo: 'Filmes', genero: 'Todos', ano: 'Todos' } };
     const watched = {};
 
@@ -474,10 +518,71 @@
             }));
         }
         if (mode === 'todos' || mode === 'cinema') {
-            let cats = state.vodCats;
-            if (mode === 'cinema') cats = cats.filter(c => /cinema|estreia|lancamento|lançamento|novos/i.test(c.category_name || ''));
-            renderPills('movie-cat-pills', cats, (catId) => { state.movieCat = catId || ''; renderMovies(1); });
+            const groups = buildVodGroups(state.vodCats);
+            const sel = mode === 'cinema'
+                ? groups.filter(g => /lançamento|4k|cinema/i.test(g.name))
+                : groups;
+            catEl.innerHTML = '<button class="filter-pill active" data-cat=""><i class="fas fa-border-all"></i> Todos</button>' +
+                sel.map(g => '<button class="filter-pill" data-cat="' + [...g.catIds].join(',') + '"><i class="fas ' + g.icon + '"></i> ' + esc(g.name) + '</button>').join('');
+            catEl.querySelectorAll('.filter-pill').forEach(p => p.addEventListener('click', () => {
+                catEl.querySelectorAll('.filter-pill').forEach(x => x.classList.remove('active'));
+                p.classList.add('active');
+                state.movieCat = p.dataset.cat || '';
+                renderMovies(1);
+            }));
         }
+    }
+
+    // ===== Grupos curados de categorias (provedor manda bagunçado) =====
+    function buildGroupList(cats, defs) {
+        const groups = [];
+        const seen = new Set();
+        const low = (n) => String(n || '').toLowerCase();
+        const add = (name, icon, re) => {
+            const ids = new Set(cats.filter(c => re.test(low(c.category_name))).map(c => String(c.category_id)));
+            if (ids.size) { groups.push({ name, icon, catIds: ids }); ids.forEach(i => seen.add(i)); }
+        };
+        defs.forEach(([name, icon, re]) => add(name, icon, re));
+        return groups;
+    }
+
+    function buildVodGroups(cats) {
+        return buildGroupList(cats, [
+            ['Lançamentos', 'fa-bolt', /lan[çc]amento|estreia|2025|2026|di[áa]rios/],
+            ['4K & Cinema', 'fa-gem', /4k|qualidade cinema|\b3d\b|alta qualidade|bluray|remaster/],
+            ['Religiosos', 'fa-church', /evang[ée]lic|religios|gospel|natal|jesus|bibli/],
+            ['Ação', 'fa-person-boxing', /a[çc][ãa]o|acao|action/],
+            ['Aventura', 'fa-mountain', /aventura|adventure/],
+            ['Comédia', 'fa-face-smile', /com[ée]dia|comedy/],
+            ['Crime', 'fa-user-secret', /crime|policia/],
+            ['Drama', 'fa-masks-theater', /drama/],
+            ['Terror', 'fa-ghost', /terror|horror|medo/],
+            ['Suspense', 'fa-user-ninja', /suspense|thriller/],
+            ['Romance', 'fa-heart', /romance/],
+            ['Ficção & Fantasia', 'fa-rocket', /fic[çc][ãa]o|sci.?fi|fantasia/],
+            ['Animação', 'fa-child', /anima[çc][ãa]o|desenho/],
+            ['Nacional', 'fa-flag', /nacional|brasileir/],
+            ['Documentário', 'fa-book-open', /document/]
+        ]);
+    }
+
+    function buildSeriesGroups(cats) {
+        return buildGroupList(cats, [
+            ['Netflix', 'fab fa-netflix', /netflix/],
+            ['Prime Video', 'fab fa-amazon', /amazon|prime video/],
+            ['HBO Max', 'fas fa-circle-play', /hbo/],
+            ['Disney+', 'fas fa-wand-magic-sparkles', /disney/],
+            ['GloboPlay', 'fas fa-globe', /globo/],
+            ['Paramount+', 'fas fa-mountain', /paramount/],
+            ['Apple TV', 'fab fa-apple', /apple/],
+            ['Crunchyroll', 'fas fa-dragon', /crunchy|anime/],
+            ['Lançamentos', 'fas fa-bolt', /lan[çc]amento/],
+            ['Drama', 'fas fa-masks-theater', /drama/],
+            ['Comédia', 'fas fa-face-smile', /com[ée]dia|comedy/],
+            ['Ação', 'fas fa-person-boxing', /a[çc][ãa]o|acao|action/],
+            ['Crime', 'fas fa-user-secret', /crime/],
+            ['Animação', 'fas fa-child', /anima[çc][ãa]o|desenho/]
+        ]);
     }
 
     function renderSeriesFilterPills() {
@@ -511,7 +616,15 @@
             }));
         }
         if (mode === 'todos') {
-            renderPills('series-cat-pills', state.seriesCats, (catId) => { state.seriesCat = catId || ''; renderSeries(1); });
+            const groups = buildSeriesGroups(state.seriesCats);
+            catEl.innerHTML = '<button class="filter-pill active" data-cat=""><i class="fas fa-border-all"></i> Todos</button>' +
+                groups.map(g => '<button class="filter-pill" data-cat="' + [...g.catIds].join(',') + '"><i class="' + g.icon + '"></i> ' + esc(g.name) + '</button>').join('');
+            catEl.querySelectorAll('.filter-pill').forEach(p => p.addEventListener('click', () => {
+                catEl.querySelectorAll('.filter-pill').forEach(x => x.classList.remove('active'));
+                p.classList.add('active');
+                state.seriesCat = p.dataset.cat || '';
+                renderSeries(1);
+            }));
         }
     }
 
@@ -526,7 +639,8 @@
             filtered = filtered.filter(m => String(m.year) === state.movieYear);
         }
         if ((state.movieFilterMode === 'todos' || state.movieFilterMode === 'cinema') && state.movieCat) {
-            filtered = filtered.filter(s => String(s.category_id) === String(state.movieCat));
+            const ids = new Set(String(state.movieCat).split(',').filter(Boolean));
+            filtered = filtered.filter(m => ids.has(String(m.category_id)) || (m.category_ids || []).some(x => ids.has(String(x))));
         }
         return filtered;
     }
@@ -542,7 +656,8 @@
             filtered = filtered.filter(s => String(s.year) === state.seriesYear);
         }
         if (state.seriesFilterMode === 'todos' && state.seriesCat) {
-            filtered = filtered.filter(s => String(s.category_id) === String(state.seriesCat));
+            const ids = new Set(String(state.seriesCat).split(',').filter(Boolean));
+            filtered = filtered.filter(s => ids.has(String(s.category_id)) || (s.category_ids || []).some(x => ids.has(String(x))));
         }
         return filtered;
     }
@@ -688,6 +803,56 @@
         renderFavoritesSection();
     }));
 
+    // ===== MODAL PROGRAMAÇÃO (grade completa do dia) =====
+    const epgTableCache = new Map();
+    async function openEpgModal(streamId, chName, chIcon) {
+        const modal = $('epg-modal');
+        const list = $('epg-list');
+        if (!modal || !list) return;
+        $('epg-modal-ch-name').textContent = chName || '';
+        const logo = $('epg-modal-ch-logo');
+        if (logo) logo.src = safeImg(chIcon);
+        const dateEl = $('epg-modal-date');
+        if (dateEl) dateEl.textContent = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' });
+        modal.classList.remove('hidden');
+        list.innerHTML = '<div class="epg-row loading"><i class="fas fa-circle-notch fa-spin"></i> Carregando programação...</div>';
+        try {
+            let items = epgTableCache.get(String(streamId));
+            if (!items) {
+                const data = await api.getSimpleEpg(streamId);
+                items = (data && data.epg_listings) || [];
+                if (!items.length) {
+                    const s = await api.getEpg(streamId);
+                    items = (s && s.epg_listings) || [];
+                }
+                if (items.length) epgTableCache.set(String(streamId), items);
+            }
+            if (!items.length) { list.innerHTML = '<div class="epg-row empty"><i class="fas fa-tv"></i><span>Este canal não possui programação (EPG)</span></div>'; return; }
+            const now = Date.now();
+            let html = '';
+            items.forEach(l => {
+                const s = parseEpgDate(l.start), e = parseEpgDate(l.end);
+                if (!s || !e) return;
+                const past = e.getTime() < now;
+                const live = s.getTime() <= now && e.getTime() >= now;
+                const desc = decodeEpgText(l.description);
+                const title = getCurrentProgramTitle(l);
+                html += '<div class="epg-row' + (live ? ' live' : '') + (past ? ' past' : '') + '">' +
+                    '<div class="epg-row-time">' + formatTimeForDisplay(s) + ' – ' + formatTimeForDisplay(e) + '</div>' +
+                    '<div class="epg-row-main">' +
+                    '<div class="epg-row-title">' + esc(title) + (live ? '<span class="epg-live-chip"><span class="dot"></span> AO VIVO</span>' : '') + '</div>' +
+                    (desc && desc !== title ? '<div class="epg-row-desc">' + esc(desc.substring(0, 220)) + (desc.length > 220 ? '…' : '') + '</div>' : '') +
+                    (live ? '<div class="epg-row-progress"><div style="width:' + calculateCurrentEventProgress(s, e) + '%"></div></div>' : '') +
+                    '</div></div>';
+            });
+            list.innerHTML = html || '<div class="epg-row empty"><span>Nada na grade</span></div>';
+            const liveEl = list.querySelector('.epg-row.live');
+            if (liveEl) setTimeout(() => liveEl.scrollIntoView({ block: 'center', behavior: 'smooth' }), 80);
+        } catch (err) {
+            list.innerHTML = '<div class="epg-row empty"><i class="fas fa-triangle-exclamation"></i><span>Erro ao carregar programação</span></div>';
+        }
+    }
+
     function loadEpgForChannel(streamId) {
         const epgBar = $('live-epg-bar');
         const epgTitle = $('epg-now-title');
@@ -739,7 +904,7 @@
         getEpgOnAir(job.streamId).then(listing => {
             if (job.card && job.card.isConnected) {
                 const el = job.card.querySelector('.ch-epg-mini');
-                if (el && listing && listing.title) el.textContent = ' • ' + listing.title;
+                if (el && listing && listing.title) el.textContent = ' • ' + getCurrentProgramTitle(listing);
             }
         }).finally(() => {
             epgActive--;
@@ -779,30 +944,59 @@
         return fallback || 'fa-tag';
     }
 
+    // ===== Regroup profissional das categorias de TV =====
+    const LIVE_GROUPS = [
+        { name: 'Esportes', icon: 'fa-futbol', re: /ppv|esporte|sport|jogo|combate|ufc|mma|luta|f1|formula|nba|nfl|eleven|premiere|espn|da?zn|caz[eé]|tnt|x-sports|nsports|ge fast|goat|surf/i },
+        { name: 'Infantil', icon: 'fa-child', re: /infantil|desenho/i },
+        { name: 'Animes & Doramas', icon: 'fa-dragon', re: /anime|dorama/i },
+        { name: 'Documentários', icon: 'fa-book-open', re: /document|history|discovery/i },
+        { name: 'Notícias', icon: 'fa-newspaper', re: /not[ií]cia|jornalis/i },
+        { name: 'Religiosos', icon: 'fa-church', re: /religios|gospel/i },
+        { name: 'Música', icon: 'fa-music', re: /m[uú]sica/i },
+        { name: 'Variedades & Novelas', icon: 'fa-masks-theater', re: /variedade|novela|reality|fazenda|vivo|exclusiv/i },
+        { name: 'TVs Abertas', icon: 'fa-tower-broadcast', re: /globo|record|sbt|band|rede ?tv|aberto|cultura/i },
+        { name: 'Filmes & Séries', icon: 'fa-clapperboard', re: /filme|s[eé]rie|telecine|hbo|cine|cinema|sky|run:|paramount|star\b|max\b|universal/i }
+    ];
+    function liveGroupOf(catName) {
+        for (const g of LIVE_GROUPS) { if (g.re.test(catName || '')) return g; }
+        return { name: 'Variedades & Novelas', icon: 'fa-masks-theater' };
+    }
+
     function renderLiveSidebar() {
         const c = $('live-categories');
-        const counts = new Map();
-        state.allLive.forEach(s => { const k = String(s.category_id); counts.set(k, (counts.get(k) || 0) + 1); });
+        // mapeia categorias cruas -> grupos curados
+        const groups = new Map();
+        state.liveCats.forEach(cat => {
+            const g = liveGroupOf(cat.category_name);
+            if (!groups.has(g.name)) groups.set(g.name, { name: g.name, icon: g.icon, catIds: new Set(), count: 0 });
+            groups.get(g.name).catIds.add(String(cat.category_id));
+        });
+        state.allLive.forEach(s => {
+            groups.forEach(g => { if (g.catIds.has(String(s.category_id))) g.count++; });
+        });
+        state.liveGroups = groups;
+        const gl = [...groups.values()].sort((a, b) => b.count - a.count);
         c.innerHTML = '<button class="live-category-btn active" data-cat=""><i class="fas fa-border-all"></i> <span class="live-cat-name">Todos os Canais</span><span class="live-cat-count">' + state.allLive.length + '</span></button>' +
-            state.liveCats.map(cat => '<button class="live-category-btn" data-cat="' + cat.category_id + '"><i class="fas ' + catIcon(cat.category_name) + '"></i> <span class="live-cat-name">' + esc(cat.category_name) + '</span><span class="live-cat-count">' + (counts.get(String(cat.category_id)) || 0) + '</span></button>').join('');
+            gl.map(g => '<button class="live-category-btn" data-cat="' + [...g.catIds].join(',') + '"><i class="fas ' + g.icon + '"></i> <span class="live-cat-name">' + esc(g.name) + '</span><span class="live-cat-count">' + g.count + '</span></button>').join('');
         c.querySelectorAll('.live-category-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 c.querySelectorAll('.live-category-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 filterLive(btn.dataset.cat);
+                const t = $('live-cat-current');
+                if (t) t.textContent = btn.querySelector('.live-cat-name').textContent;
             });
         });
-        // Categoria atual no header da grade
-        c.addEventListener('click', () => {
-            const act = c.querySelector('.live-category-btn.active .live-cat-name');
-            const t = $('live-cat-current');
-            if (t && act) t.textContent = act.textContent;
-        });
+        const t = $('live-cat-current');
+        if (t) t.textContent = 'Todos os Canais';
     }
 
     function filterLive(catId) {
         let filtered = state.allLive;
-        if (catId) filtered = filtered.filter(s => String(s.category_id) === String(catId));
+        if (catId) {
+            const ids = new Set(String(catId).split(',').filter(Boolean));
+            filtered = filtered.filter(s => ids.has(String(s.category_id)) || (s.category_ids || []).some(x => ids.has(String(x))));
+        }
         filtered = ContentFilter.filterItems(filtered, state.liveSection);
         filtered = filtered.filter(s => !ContentFilter.isAdult(s.name || s.category_name || ''));
         renderChannels(filtered);
@@ -848,7 +1042,7 @@
         if (epgMiniCache.has(sid)) {
             const listing = epgMiniCache.get(sid);
             const el = card.querySelector('.ch-epg-mini');
-            if (el && listing && listing.title) el.textContent = ' • ' + listing.title;
+            if (el && listing && listing.title) el.textContent = ' • ' + getCurrentProgramTitle(listing);
             return;
         }
         if (epgQueue.some(j => j.streamId === sid)) return;
@@ -922,7 +1116,7 @@
         const hasIcon = stream.stream_icon && stream.stream_icon.trim();
         const cat = ContentFilter.cleanCategoryName(stream.category_name || '');
         const logoSrc = hasIcon ? safeImg(stream.stream_icon) : PLACEHOLDER_IMG;
-        card.innerHTML = '<span class="ch-number">#' + num + '</span><img class="ch-logo" src="' + logoSrc + '" loading="lazy" decoding="async" referrerpolicy="no-referrer" alt="" onerror="this.onerror=null;this.src=\'assets/images/placeholder.svg\'"><div class="ch-info"><div class="ch-name">' + esc(stream.name) + '</div><div class="ch-category">' + esc(cat) + '<span class="ch-epg-mini" data-epg-for="' + stream.stream_id + '"></span></div></div><div class="ch-status-dot ' + (hasIcon ? 'warning' : 'offline') + '" title="Status do canal"></div>';
+        card.innerHTML = '<span class="ch-number">#' + num + '</span><img class="ch-logo" src="' + logoSrc + '" loading="lazy" decoding="async" referrerpolicy="no-referrer" alt="" onerror="this.onerror=null;this.src=\'assets/images/placeholder.svg\'"><div class="ch-info"><div class="ch-name">' + esc(stream.name) + '</div><div class="ch-category">' + esc(cat) + '<span class="ch-epg-mini" data-epg-for="' + stream.stream_id + '"></span></div></div><button class="ch-guide" title="Programação"><i class="fas fa-list-ul"></i></button><div class="ch-status-dot ' + (hasIcon ? 'warning' : 'offline') + '" title="Status do canal"></div>';
         card.addEventListener('click', () => {
             const play = () => {
                 WatchStore.record('live', stream.stream_id, stream.name);
@@ -934,6 +1128,10 @@
                 return;
             }
             play();
+        });
+        card.querySelector('.ch-guide')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openEpgModal(stream.stream_id, stream.name, stream.stream_icon);
         });
         return card;
     }
@@ -972,7 +1170,9 @@
         const img = item.stream_icon || item.cover || '';
         const title = item.name || item.title || '';
         const id = type === 'series' ? (item.series_id || item.stream_id) : item.stream_id;
+        const q = qualityBadge(title);
         const badge = type === 'movie' ? '<div class="badge movie">FILME</div>' : type === 'series' ? '<div class="badge series">SERIE</div>' : '';
+        const qBadge = q ? '<div class="badge quality-chip">' + q + '</div>' : '';
         const isFav = FavoriteStore.is(type, id);
         const favBtn = '<button class="card-fav' + (isFav ? ' active' : '') + '" data-fav-type="' + type + '" data-fav-id="' + id + '" title="Favoritar"><i class="fas fa-heart"></i></button>';
         const prog = type === 'movie' ? (WatchStore.getProgress('movie', item.stream_id) || WatchStore.getProgress('vod', item.stream_id)) : (item.series_id ? WatchStore.getProgress('series', item.series_id) : null);
@@ -981,8 +1181,9 @@
             const pct = Math.min(100, (prog.lastWatchedPosition / prog.totalDuration) * 100);
             progBar = '<div class="card-progress"><div class="card-progress-fill" style="width:' + pct + '%"></div></div>';
         }
+        const rt = rating10(item);
         const posterSrc = safeImg(img);
-        card.innerHTML = badge + favBtn + '<img class="poster-img" src="' + posterSrc + '" loading="lazy" decoding="async" referrerpolicy="no-referrer" alt="" onerror="this.onerror=null;this.src=\'assets/images/placeholder.svg\'">' + progBar + '<div class="card-body"><div class="card-title">' + esc(title) + '</div>' + (item.rating ? '<div class="card-meta"><span class="rating"><i class="fas fa-star"></i> ' + esc(String(item.rating)) + '</span>' + (item.year ? '<span class="year">' + esc(item.year) + '</span>' : '') + '</div>' : '') + '</div>';
+        card.innerHTML = badge + qBadge + favBtn + '<img class="poster-img" src="' + posterSrc + '" loading="lazy" decoding="async" referrerpolicy="no-referrer" alt="" onerror="this.onerror=null;this.src=\'assets/images/placeholder.svg\'">' + progBar + '<div class="card-body"><div class="card-title">' + esc(title) + '</div>' + (rt || item.year ? '<div class="card-meta">' + (rt ? '<span class="rating"><i class="fas fa-star"></i> ' + rt.toFixed(1) + '</span>' : '') + (item.year ? '<span class="year">' + esc(item.year) + '</span>' : '') + '</div>' : '') + '</div>';
         card.querySelector('.card-fav')?.addEventListener('click', (e) => {
             e.stopPropagation();
             FavoriteStore.toggle(type, id);
@@ -1037,6 +1238,20 @@
         });
     }
 
+    function detailHero(opts) {
+        const { bg, poster, title, metaHtml, actionsHtml } = opts;
+        const bgUrl = safeImg(bg);
+        return '<div class="detail-hero" style="background-image:url(\'' + bgUrl + '\')">' +
+            '<div class="detail-hero-scrim"></div>' +
+            '<div class="detail-hero-body">' +
+            (poster ? '<img class="detail-hero-poster" src="' + safeImg(poster) + '" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display=\'none\'" alt="">' : '') +
+            '<div class="detail-hero-info">' +
+            '<h2>' + esc(title) + '</h2>' +
+            '<div class="detail-meta">' + metaHtml + '</div>' +
+            '<div class="detail-actions">' + actionsHtml + '</div>' +
+            '</div></div></div>';
+    }
+
     async function showMovieDetail(movie) {
         if (ContentFilter.isAdult(movie.name || movie.category_name || '') && !state.adultUnlocked) {
             requirePin(() => { state.adultUnlocked = true; showMovieDetail(movie); });
@@ -1047,29 +1262,43 @@
         showLoading('Carregando...');
         let info = null;
         try { info = await api.getVodInfo(movie.stream_id); } catch (e) {}
+        const om = await omdbLookup(movie.name, movie.year);
         hideLoading();
         const title = movie.name || '';
-        const plot = info?.info?.plot || '';
-        const cast = info?.info?.cast || '';
-        const genre = info?.info?.genre || movie.category_name || '';
-        const rating = info?.info?.rating || movie.rating || '';
-        const year = info?.info?.year || movie.year || '';
-        const duration = info?.info?.duration || '';
-        const img = movie.stream_icon || '';
+        const plot = (om && om.Plot && om.Plot !== 'N/A') ? om.Plot : (info?.info?.plot || '');
+        const cast = (om && om.Actors && om.Actors !== 'N/A') ? om.Actors : (info?.info?.cast || '');
+        const director = (om && om.Director && om.Director !== 'N/A') ? om.Director : (info?.info?.director || '');
+        const genre = (om && om.Genre && om.Genre !== 'N/A') ? om.Genre : (info?.info?.genre || movie.category_name || '');
+        const rating = rating10({ rating: (om && om.imdbRating && om.imdbRating !== 'N/A') ? om.imdbRating : (movie.rating || info?.info?.rating), rating_5based: movie.rating_5based || info?.info?.rating_5based });
+        const year = movie.year || info?.info?.year || (om && om.Year) || '';
+        const duration = (om && om.Runtime && om.Runtime !== 'N/A') ? om.Runtime : (info?.info?.duration || '');
+        const img = movie.stream_icon || info?.info?.movie_image || '';
+        const qBadge = qualityBadge(title);
 
         let meta = '';
+        if (rating) meta += '<span class="meta-badge star"><i class="fas fa-star"></i> ' + rating.toFixed(1) + (om ? ' <span class="meta-src">IMDb</span>' : '') + '</span>';
         if (year) meta += '<span class="meta-badge"><i class="fas fa-calendar"></i> ' + esc(year) + '</span>';
-        if (rating) meta += '<span class="meta-badge"><i class="fas fa-star" style="color:var(--warning)"></i> ' + esc(String(rating)) + '</span>';
         if (duration) meta += '<span class="meta-badge"><i class="fas fa-clock"></i> ' + esc(duration) + '</span>';
-        if (genre) meta += '<span class="meta-badge"><i class="fas fa-tag"></i> ' + esc(genre) + '</span>';
+        if (qBadge) meta += '<span class="meta-badge quality">' + qBadge + '</span>';
+        if (genre) meta += '<span class="meta-badge"><i class="fas fa-tag"></i> ' + esc(String(genre).split(',').slice(0, 3).join(', ')) + '</span>';
+        meta += '<span class="meta-badge movietype"><i class="fas fa-film"></i> Filme</span>';
 
         const prog = WatchStore.getProgress('movie', movie.stream_id) || WatchStore.getProgress('vod', movie.stream_id);
         const hasResume = prog && !prog.isCompleted && prog.lastWatchedPosition > 5;
-        const resumeBtn = hasResume ? '<button class="btn-watch secondary" id="btn-resume-movie"><i class="fas fa-redo"></i> Continue Assistindo (' + player.fmt(prog.lastWatchedPosition) + ')</button>' : '';
-        const trailerBtn = '<button class="btn-watch secondary" id="btn-trailer-movie" disabled><i class="fas fa-film"></i> Trailer</button>';
+        const isFav = FavoriteStore.is('movie', movie.stream_id);
+        const actions =
+            (hasResume ? '<button class="btn-watch resume" id="btn-resume-movie"><i class="fas fa-rotate-left"></i> Continuar · ' + player.fmt(prog.lastWatchedPosition) + '</button>' : '') +
+            '<button class="btn-watch primary" id="btn-play-movie"><i class="fas fa-play"></i> Assistir</button>' +
+            '<button class="btn-watch secondary" id="btn-trailer-movie"><i class="fab fa-youtube"></i> Trailer</button>' +
+            '<button class="btn-watch icon' + (isFav ? ' active' : '') + '" id="btn-fav-movie" title="Favoritar"><i class="' + (isFav ? 'fas' : 'far') + ' fa-heart"></i></button>';
 
-        const imgTag = '<img class="detail-poster" src="' + safeImg(img) + '" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src=\'assets/images/placeholder.svg\'" alt="">';
-        content.innerHTML = '<div class="detail-header">' + imgTag + '<div class="detail-info"><h2>' + esc(title) + '</h2><div class="detail-meta">' + meta + '</div>' + (plot ? '<p class="detail-desc">' + esc(plot) + '</p>' : '<p class="detail-desc">Sem descricao disponivel.</p>') + (cast ? '<p class="detail-desc" style="margin-top:-8px"><strong>Elenco:</strong> ' + esc(cast) + '</p>' : '') + '<div class="detail-actions">' + resumeBtn + '<button class="btn-watch" id="btn-play-movie"><i class="fas fa-play"></i> Assistir Agora</button>' + trailerBtn + '</div></div></div>';
+        content.innerHTML = detailHero({ bg: img, poster: img, title, metaHtml: meta, actionsHtml: actions }) +
+            '<div class="detail-body">' +
+            '<p class="detail-desc">' + (plot ? esc(plot) : 'Sinopse não disponível para este título.') + '</p>' +
+            (cast ? '<p class="detail-people"><strong>Elenco:</strong> ' + esc(cast) + '</p>' : '') +
+            (director ? '<p class="detail-people"><strong>Direção:</strong> ' + esc(director) + '</p>' : '') +
+            '</div>';
+
         $('btn-play-movie')?.addEventListener('click', () => {
             WatchStore.record('movie', movie.stream_id, title);
             modal.classList.add('hidden');
@@ -1081,6 +1310,14 @@
             modal.classList.add('hidden');
             const ext = info?.movie_data?.container_extension || movie.container_extension || 'mp4';
             player.play(api.getVideoUrl('movie', movie.stream_id, ext), title, 'movie', { streamId: movie.stream_id, resumeAt: prog ? prog.lastWatchedPosition : 0 });
+        });
+        $('btn-trailer-movie')?.addEventListener('click', () => window.open(trailerUrl(title), '_blank'));
+        $('btn-fav-movie')?.addEventListener('click', (e) => {
+            FavoriteStore.toggle('movie', movie.stream_id);
+            const on = FavoriteStore.is('movie', movie.stream_id);
+            e.currentTarget.classList.toggle('active', on);
+            e.currentTarget.innerHTML = '<i class="' + (on ? 'fas' : 'far') + ' fa-heart"></i>';
+            showToast(on ? 'Adicionado aos favoritos' : 'Removido dos favoritos', 'success');
         });
         modal.classList.remove('hidden');
     }
@@ -1098,50 +1335,107 @@
         try { info = await api.getSeriesInfo(sid); } catch (e) {}
         hideLoading();
 
-        const img = series.cover || series.stream_icon || '';
-        const title = series.name || '';
-        const plot = info?.info?.plot || '';
-        const genre = info?.info?.genre || series.category_name || '';
-        const rating = info?.info?.rating || '';
+        const i = info?.info || series;
+        const img = series.cover || series.stream_icon || i.cover || '';
+        const bg = i.backdrop_path || img;
+        const title = series.name || i.name || '';
+        const plot = i.plot || series.plot || '';
+        const genre = i.genre || series.genre || series.category_name || '';
+        const cast = i.cast || series.cast || '';
+        const director = i.director || series.director || '';
+        const rating = rating10({ rating: i.rating || series.rating, rating_5based: i.rating_5based || series.rating_5based });
+        const year = i.releaseDate || i.release_date || i.year || series.releaseDate || series.year || '';
+        const runTime = i.episode_run_time || series.episode_run_time;
+        const trailer = i.youtube_trailer || series.youtube_trailer;
         const episodes = info?.episodes || {};
         const seasonKeys = Object.keys(episodes).sort((a, b) => Number(a) - Number(b));
         const seasons = seasonKeys.length ? seasonKeys.map(k => ({ season_number: k })) : (info?.seasons || []);
+        const totalEps = Object.values(episodes).reduce((a, arr) => a + (arr?.length || 0), 0);
 
         let meta = '';
-        if (rating) meta += '<span class="meta-badge"><i class="fas fa-star" style="color:var(--warning)"></i> ' + esc(String(rating)) + '</span>';
-        if (genre) meta += '<span class="meta-badge"><i class="fas fa-tag"></i> ' + esc(genre) + '</span>';
-        if (seasons.length) meta += '<span class="meta-badge"><i class="fas fa-layer-group"></i> ' + seasons.length + ' Temp.</span>';
+        if (rating) meta += '<span class="meta-badge star"><i class="fas fa-star"></i> ' + rating.toFixed(1) + '</span>';
+        if (year) meta += '<span class="meta-badge"><i class="fas fa-calendar"></i> ' + esc(String(year).substring(0, 10)) + '</span>';
+        if (seasons.length) meta += '<span class="meta-badge"><i class="fas fa-layer-group"></i> ' + seasons.length + (seasons.length > 1 ? ' temporadas' : ' temporada') + '</span>';
+        if (totalEps) meta += '<span class="meta-badge"><i class="fas fa-list-ol"></i> ' + totalEps + ' episódios</span>';
+        if (runTime && Number(runTime) > 0) meta += '<span class="meta-badge"><i class="fas fa-clock"></i> ~' + esc(String(runTime)) + 'min/ep</span>';
+        if (genre) meta += '<span class="meta-badge"><i class="fas fa-tag"></i> ' + esc(String(genre).split(',').slice(0, 3).join(', ')) + '</span>';
+        meta += '<span class="meta-badge seriestype"><i class="fas fa-clapperboard"></i> Série</span>';
+
+        const isFav = FavoriteStore.is('series', sid);
+        const actions =
+            '<button class="btn-watch primary" id="btn-play-first"><i class="fas fa-play"></i> Assistir T1 E1</button>' +
+            '<button class="btn-watch secondary" id="btn-trailer-series"><i class="fab fa-youtube"></i> Trailer</button>' +
+            '<button class="btn-watch icon' + (isFav ? ' active' : '') + '" id="btn-fav-series" title="Favoritar"><i class="' + (isFav ? 'fas' : 'far') + ' fa-heart"></i></button>';
 
         let seasonsHtml = '';
         if (seasons.length) {
-            seasonsHtml = '<div class="seasons-pills" id="seasons-pills">' +
-                seasons.map((s, i) => '<button class="season-pill' + (i === 0 ? ' active' : '') + '" data-season="' + s.season_number + '">T' + s.season_number + '</button>').join('') +
-                '</div><div class="episodes-grid" id="episodes-grid"></div>';
+            seasonsHtml = '<div class="detail-body detail-seasons-body">' +
+                '<div class="seasons-pills" id="seasons-pills">' +
+                seasons.map((s, idx) => '<button class="season-pill' + (idx === 0 ? ' active' : '') + '" data-season="' + s.season_number + '">T' + s.season_number + '</button>').join('') +
+                '</div><div class="episodes-grid" id="episodes-grid"></div></div>';
+        } else {
+            seasonsHtml = '<div class="detail-body"><div class="empty-state"><i class="fas fa-clapperboard"></i><p>Nenhum episódio disponível</p></div></div>';
         }
 
-        const serImgTag = '<img class="detail-poster" src="' + safeImg(img) + '" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src=\'assets/images/placeholder.svg\'" alt="">';
-        content.innerHTML = '<div class="detail-header">' + serImgTag + '<div class="detail-info"><h2>' + esc(title) + '</h2><div class="detail-meta">' + meta + '</div>' + (plot ? '<p class="detail-desc">' + esc(plot) + '</p>' : '<p class="detail-desc">Sem descricao disponivel.</p>') + '</div></div>' + seasonsHtml;
+        content.innerHTML = detailHero({ bg, poster: img, title, metaHtml: meta, actionsHtml: actions }) +
+            '<div class="detail-body">' +
+            '<p class="detail-desc">' + (plot ? esc(plot) : 'Sinopse não disponível para este título.') + '</p>' +
+            (cast ? '<p class="detail-people"><strong>Elenco:</strong> ' + esc(cast) + '</p>' : '') +
+            (director ? '<p class="detail-people"><strong>Direção:</strong> ' + esc(director) + '</p>' : '') +
+            '</div>' + seasonsHtml;
 
         if (seasons.length) {
             renderEpisodes(sid, seasons[0].season_number, episodes);
             document.querySelectorAll('.season-pill').forEach(pill => {
-                pill.addEventListener('click', async () => {
+                pill.addEventListener('click', () => {
                     document.querySelectorAll('.season-pill').forEach(p => p.classList.remove('active'));
                     pill.classList.add('active');
-                    const sn = String(pill.dataset.season);
-                    renderEpisodes(sid, sn, episodes);
+                    renderEpisodes(sid, String(pill.dataset.season), episodes);
                 });
             });
         }
-
+        $('btn-play-first')?.addEventListener('click', () => {
+            if (!seasons.length) return;
+            const ep = (episodes[seasons[0].season_number] || [])[0];
+            if (!ep) { showToast('Episódio indisponível', 'error'); return; }
+            $('detail-modal').classList.add('hidden');
+            WatchStore.record('series', ep.id, ep.title || title);
+            player.play(api.getVideoUrl('series', ep.id, ep.container_extension || 'mp4'), title + ' — ' + cleanEpTitle(ep.title, ep.episode_number), 'series', { streamId: ep.id, resumeAt: 0 });
+        });
+        $('btn-trailer-series')?.addEventListener('click', () => window.open(trailer || trailerUrl(title), '_blank'));
+        $('btn-fav-series')?.addEventListener('click', (e) => {
+            FavoriteStore.toggle('series', sid);
+            const on = FavoriteStore.is('series', sid);
+            e.currentTarget.classList.toggle('active', on);
+            e.currentTarget.innerHTML = '<i class="' + (on ? 'fas' : 'far') + ' fa-heart"></i>';
+            showToast(on ? 'Adicionado aos favoritos' : 'Removido dos favoritos', 'success');
+        });
         modal.classList.remove('hidden');
     }
 
     function renderEpisodes(sid, seasonNum, allEpisodes) {
         const eps = allEpisodes[seasonNum] || [];
         const c = $('episodes-grid');
-        if (!eps.length) { c.innerHTML = '<div class="empty-state"><p>Nenhum episodio encontrado</p></div>'; return; }
-        c.innerHTML = eps.map(ep => '<div class="episode-card" data-id="' + ep.id + '" data-title="' + esc(ep.title || 'Ep ' + ep.episode_number) + '" data-ext="' + esc(ep.container_extension || 'mp4') + '"><div class="episode-num">' + ep.episode_number + '</div><div class="ep-info"><div class="ep-name">' + esc(ep.title || 'Episodio ' + ep.episode_number) + '</div>' + (ep.container_extension ? '<div class="ep-meta">.' + esc(ep.container_extension) + '</div>' : '') + '</div><button class="ep-play"><i class="fas fa-play"></i></button></div>').join('');
+        if (!eps.length) { c.innerHTML = '<div class="empty-state"><p>Nenhum episódio encontrado</p></div>'; return; }
+        c.innerHTML = eps.map(ep => {
+            const still = safeImg(ep.info?.movie_image || ep.info?.cover_big || '');
+            const dur = ep.info?.duration || '';
+            const plot = ep.info?.plot || '';
+            const epTitle = cleanEpTitle(ep.title, ep.episode_number);
+            const prog = WatchStore.getProgress('series', ep.id);
+            const pct = prog && !prog.isCompleted && prog.lastWatchedPosition > 5 && prog.totalDuration > 0 ? Math.min(100, (prog.lastWatchedPosition / prog.totalDuration) * 100) : 0;
+            return '<div class="episode-card" data-id="' + ep.id + '" data-title="' + esc(epTitle) + '" data-ext="' + esc(ep.container_extension || 'mp4') + '" data-fulltitle="' + esc(ep.title || '') + '">' +
+                '<div class="ep-still">' +
+                '<img src="' + still + '" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.visibility=\'hidden\'" alt="">' +
+                '<div class="ep-still-play"><i class="fas fa-play"></i></div>' +
+                (pct ? '<div class="ep-progress"><div style="width:' + pct + '%"></div></div>' : '') +
+                '</div>' +
+                '<div class="ep-info">' +
+                '<div class="ep-name"><span class="ep-num-chip">E' + ep.episode_number + '</span> ' + esc(epTitle) + '</div>' +
+                '<div class="ep-meta">' + (dur ? '<i class="fas fa-clock"></i> ' + esc(dur) : '') + '</div>' +
+                (plot ? '<div class="ep-plot">' + esc(plot.substring(0, 180)) + (plot.length > 180 ? '…' : '') + '</div>' : '') +
+                '</div></div>';
+        }).join('');
         c.querySelectorAll('.episode-card').forEach(card => {
             card.addEventListener('click', () => {
                 const epId = card.dataset.id;
@@ -1277,6 +1571,16 @@
         if (!url) { showToast('Falha ao montar URL de timeshift', 'error'); return; }
         player.play(url, cur.title + ' (Timeshift)', 'live', { streamId: cur.streamId });
     });
+
+    $('epg-full-btn')?.addEventListener('click', () => {
+        const cur = state.currentEpg;
+        const stream = cur ? state.allLive.find(s => String(s.stream_id) === String(cur.streamId)) : null;
+        if (!stream) { showToast('Selecione um canal primeiro', 'error'); return; }
+        openEpgModal(stream.stream_id, stream.name, stream.stream_icon);
+    });
+
+    $('btn-close-epg')?.addEventListener('click', () => $('epg-modal').classList.add('hidden'));
+    $('epg-modal')?.addEventListener('click', (e) => { if (e.target === e.currentTarget) e.currentTarget.classList.add('hidden'); });
 
     function shouldIncludeByYear(title, year) {
         if (!year || year === 'Todos') return true;

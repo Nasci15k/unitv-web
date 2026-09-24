@@ -6,30 +6,29 @@
     <meta name="supabase-url" content="https://figvurwbnocrzoupvtgs.supabase.co">
     <meta name="supabase-anon" content="sb_publishable_MRl6mB27qtXrDMyF9obwUg_vYtSNh7f">
     <title>Entrar — OpenTv</title>
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23e94560'/><text x='50' y='68' font-size='50' font-weight='bold' text-anchor='middle' fill='white' font-family='Arial'>OT</text></svg>">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23e50914'/><text x='50' y='68' font-size='50' font-weight='bold' text-anchor='middle' fill='white' font-family='Arial'>OT</text></svg>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
         *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
-        :root{--accent:#e94560;--bg:#0b0d17;--bg2:#141726;--bg3:#1c2033;--text:#fff;--text2:rgba(255,255,255,.65);--text3:rgba(255,255,255,.38);--border:rgba(255,255,255,.08);--ok:#10b981;--err:#ef4444;--warn:#f59e0b;--font:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
+        :root{--accent:#e50914;--accent-soft:#ff3341;--bg:#0f0f11;--bg2:#1a1a1e;--bg3:#232329;--text:#fff;--text2:rgba(255,255,255,.68);--text3:rgba(255,255,255,.4);--border:rgba(255,255,255,.08);--ok:#10b981;--err:#ef4444;--warn:#f59e0b;--font:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
         html,body{height:100%}
         body{font-family:var(--font);background:var(--bg);color:var(--text);display:flex;align-items:center;justify-content:center;padding:24px;overflow:auto}
-        body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 70% 45% at 25% -10%,rgba(233,69,96,.12),transparent),radial-gradient(ellipse 55% 40% at 85% 110%,rgba(124,58,237,.1),transparent);pointer-events:none}
-        .card{position:relative;width:100%;max-width:400px;background:rgba(20,23,38,.92);border:1px solid var(--border);border-radius:18px;padding:34px 30px;box-shadow:0 16px 60px rgba(0,0,0,.5)}
+        .card{position:relative;width:100%;max-width:400px;background:#16161a;border:1px solid var(--border);border-radius:16px;padding:34px 30px;box-shadow:0 22px 70px rgba(0,0,0,.6)}
         .logo{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:6px}
-        .logo svg{width:40px;height:40px;filter:drop-shadow(0 0 18px rgba(233,69,96,.35))}
+        .logo svg{width:40px;height:40px;filter:drop-shadow(0 0 18px rgba(229,9,20,.45))}
         .logo h1{font-size:26px;font-weight:900;letter-spacing:-.5px}
-        .logo h1 span{background:linear-gradient(135deg,#e94560,#7c3aed);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+        .logo h1 span{color:var(--accent)}
         .sub{text-align:center;color:var(--text3);font-size:13px;margin-bottom:24px}
-        .tabs{display:flex;background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:4px;margin-bottom:22px}
-        .tab{flex:1;padding:10px 8px;border:none;background:none;color:var(--text3);font-family:var(--font);font-size:13px;font-weight:600;border-radius:9px;cursor:pointer;transition:all .2s}
-        .tab.active{background:var(--accent);color:#fff;box-shadow:0 4px 14px rgba(233,69,96,.35)}
+        .tabs{display:flex;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:4px;margin-bottom:22px}
+        .tab{flex:1;padding:10px 8px;border:none;background:none;color:var(--text3);font-family:var(--font);font-size:13px;font-weight:600;border-radius:8px;cursor:pointer;transition:all .2s}
+        .tab.active{background:var(--accent);color:#fff}
         form{display:flex;flex-direction:column;gap:13px}
         .field label{display:block;font-size:12px;font-weight:600;color:var(--text2);margin-bottom:6px}
         .field input{width:100%;padding:12px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:14px;font-family:var(--font);transition:all .2s}
-        .field input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(233,69,96,.15)}
+        .field input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(229,9,20,.14)}
         .field input::placeholder{color:var(--text3)}
-        .btn{margin-top:6px;padding:13px;background:linear-gradient(135deg,#e94560,#7c3aed);border:none;border-radius:50px;color:#fff;font-size:14px;font-weight:700;font-family:var(--font);cursor:pointer;transition:all .25s}
-        .btn:hover{transform:translateY(-2px);box-shadow:0 8px 26px rgba(233,69,96,.4)}
+        .btn{margin-top:6px;padding:13px;background:var(--accent);border:none;border-radius:10px;color:#fff;font-size:14px;font-weight:700;font-family:var(--font);cursor:pointer;transition:all .25s}
+        .btn:hover{background:var(--accent-soft);transform:translateY(-2px);box-shadow:0 10px 30px rgba(229,9,20,.4)}
         .btn:disabled{opacity:.55;cursor:not-allowed;transform:none;box-shadow:none}
         .msg{display:none;padding:11px 13px;border-radius:10px;font-size:13px;line-height:1.45;margin-bottom:12px}
         .msg.show{display:block}
@@ -45,7 +44,7 @@
 <body>
 <div class="card">
   <div class="logo">
-    <svg viewBox="0 0 40 40" width="40" height="40"><rect width="40" height="40" rx="10" fill="url(#lg)"/><path d="M14 14 L20 20 L14 26" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M22 14 L28 20 L22 26" stroke="rgba(255,255,255,.45)" stroke-width="3" fill="none" stroke-linecap="round"/><defs><linearGradient id="lg" x1="0" y1="0" x2="40" y2="40"><stop offset="0%" stop-color="#e94560"/><stop offset="100%" stop-color="#7c3aed"/></linearGradient></defs></svg>
+    <svg viewBox="0 0 40 40" width="40" height="40"><rect width="40" height="40" rx="10" fill="url(#lg)"/><path d="M14 14 L20 20 L14 26" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M22 14 L28 20 L22 26" stroke="rgba(255,255,255,.45)" stroke-width="3" fill="none" stroke-linecap="round"/><defs><linearGradient id="lg" x1="0" y1="0" x2="40" y2="40"><stop offset="0%" stop-color="#e50914"/><stop offset="100%" stop-color="#ff3341"/></linearGradient></defs></svg>
     <h1>Open<span>Tv</span></h1>
   </div>
   <p class="sub">Entre ou crie sua conta (aprovação necessária)</p>

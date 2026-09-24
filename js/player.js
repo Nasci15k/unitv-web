@@ -66,6 +66,8 @@ class VideoPlayer {
         this.retryBtn?.addEventListener('click', () => this.retry());
         this.btnPlayPause?.addEventListener('click', () => this.togglePlay());
         this.btnFullscreen?.addEventListener('click', () => this.toggleFullscreen());
+        document.addEventListener('fullscreenchange', () => this._updateFsIcon());
+        document.addEventListener('webkitfullscreenchange', () => this._updateFsIcon());
         this.btnMute?.addEventListener('click', () => this.toggleMute());
         this.volumeSlider?.addEventListener('input', (e) => this.setVolume(e.target.value));
         this.videoEl?.addEventListener('click', () => this.togglePlay());
@@ -1134,11 +1136,33 @@ class VideoPlayer {
     }
 
     toggleFullscreen() {
-        const el = this.container;
-        if (!document.fullscreenElement) {
-            el.requestFullscreen?.().catch(() => {});
+        const el = this.container || this.videoEl;
+        const fsEl = document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement;
+        if (!fsEl) {
+            const req = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+            if (req) {
+                try { const p = req.call(el); if (p && p.catch) p.catch(() => this._iosFallbackFs()); }
+                catch (e) { this._iosFallbackFs(); }
+            } else {
+                this._iosFallbackFs();
+            }
         } else {
-            document.exitFullscreen?.();
+            const exit = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
+            if (exit) { try { const p = exit.call(document); if (p && p.catch) p.catch(() => {}); } catch (e) {} }
+        }
+        setTimeout(() => this._updateFsIcon(), 120);
+    }
+
+    _iosFallbackFs() {
+        const v = this.videoEl;
+        if (v && v.webkitEnterFullscreen) { try { v.webkitEnterFullscreen(); return; } catch (e) {} }
+        if (v && v.webkitSupportsFullscreen) { try { v.webkitSetPresentationMode && v.webkitSetPresentationMode('fullscreen'); } catch (e) {} }
+    }
+
+    _updateFsIcon() {
+        const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+        if (this.btnFullscreen) {
+            this.btnFullscreen.innerHTML = fsEl ? '<i class="fas fa-compress"></i>' : '<i class="fas fa-expand"></i>';
         }
     }
 
