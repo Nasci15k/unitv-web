@@ -1,6 +1,9 @@
 [build]
   publish = "."
 
+[functions]
+  directory = "netlify/functions"
+
 [[edge_functions]]
   path = "/xtream-api/*"
   function = "xtream-api"
@@ -8,6 +11,18 @@
 [[edge_functions]]
   path = "/xtream-stream/*"
   function = "xtream-stream"
+
+[[edge_functions]]
+  path = "/status-all"
+  function = "status-api"
+
+[[edge_functions]]
+  path = "/status-report"
+  function = "status-api"
+
+[[edge_functions]]
+  path = "/genres-all"
+  function = "status-api"
 
 # Proxy fallback (se edge function não rodar)
 [[redirects]]

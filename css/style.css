@@ -85,6 +85,7 @@ html,body{height:100%;font-family:var(--font);background:var(--bg-0);color:var(-
 .section-title{font-size:21px;font-weight:800;letter-spacing:-.4px;display:flex;align-items:center;gap:11px;margin-bottom:18px;position:relative;padding-bottom:12px}
 .section-title i{font-size:15px;color:var(--accent-soft);width:32px;height:32px;display:flex;align-items:center;justify-content:center;background:rgba(229,9,20,.12);border-radius:9px}
 .section-title::after{content:'';position:absolute;left:0;bottom:0;width:44px;height:3px;border-radius:99px;background:var(--accent)}
+.count-chip{font-size:11px;font-weight:700;color:var(--text-3);background:rgba(255,255,255,.07);padding:3px 10px;border-radius:20px;margin-left:10px;letter-spacing:.3px;font-variant-numeric:tabular-nums;flex-shrink:0}
 .section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px}
 .mt-6{margin-top:26px}
 

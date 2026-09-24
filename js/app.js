@@ -21,7 +21,10 @@ document.addEventListener('DOMContentLoaded', () => {
         return location.origin + '/xtream-stream/__f/' + encodeURIComponent(href);
     }
     function safeImg(url) {
-        if (!url || !url.trim()) return PLACEHOLDER_IMG;
+        if (Array.isArray(url)) url = url[0]; // backdrop_path as vezes vem como array
+        if (url === null || url === undefined) return PLACEHOLDER_IMG;
+        if (typeof url !== 'string') url = String(url);
+        if (!url.trim()) return PLACEHOLDER_IMG;
         try {
             let u = new URL(url, location.href);
             if (DEAD_IMG_HOSTS[u.hostname]) return PLACEHOLDER_IMG;
@@ -184,7 +187,7 @@ document.addEventListener('DOMContentLoaded', () => {
         s = s.replace(/^S\d+\s*E\d+\s*[-–]\s*/i, '').replace(/\s*[-–]\s*S\d+E\d+\s*$/i, '').replace(/^S\d+E\d+\s*/i, '').trim();
         return s || 'Episódio ' + epNum;
     }
-    const state = { section: 'live', allLive: [], allMovies: [], allSeries: [], liveCats: [], vodCats: [], seriesCats: [], moviesPage: 1, seriesPage: 1, movieSection: 'general', seriesSection: 'general', liveSection: 'general', movieFilterMode: 'todos', seriesFilterMode: 'todos', movieGenre: '', movieYear: '', seriesGenre: '', seriesYear: '', movieCat: '', seriesCat: '', favTab: 'favorites', searchType: '', historyDeleteMode: false, adultUnlocked: false, currentEpg: null, jogosLoaded: false, jogosDateIdx: 0, jogosGames: [], jogosComps: {}, jogosCountries: {}, filterSel: { tipo: 'Filmes', genero: 'Todos', ano: 'Todos' } };
+    const state = { section: 'live', allLive: [], allMovies: [], allSeries: [], liveCats: [], vodCats: [], seriesCats: [], moviesPage: 1, seriesPage: 1, movieSection: 'general', seriesSection: 'general', liveSection: 'general', movieFilterMode: 'todos', seriesFilterMode: 'todos', movieGenre: '', movieYear: '', seriesGenre: '', seriesYear: '', movieCat: '', seriesCat: '', movieCatExtra: null, favTab: 'favorites', searchType: '', historyDeleteMode: false, adultUnlocked: false, currentEpg: null, jogosLoaded: false, jogosDateIdx: 0, jogosGames: [], jogosComps: {}, jogosCountries: {}, filterSel: { tipo: 'Filmes', genero: 'Todos', ano: 'Todos' }, serverStatus: new Map(), movieGenres: new Map() };
     const watched = {};
 
     const ContentFilter = {
@@ -554,6 +557,83 @@ document.addEventListener('DOMContentLoaded', () => {
         hideLoading();
     }
 
+    // ===== STATUS DE CANAIS (servidor) + GENEROS ENRIQUECIDOS =====
+    async function loadServerStatus() {
+        try {
+            const cached = JSON.parse(localStorage.getItem('opentv_chstatus_v1') || 'null');
+            if (cached && Date.now() - cached.t < 21600000 && cached.st) {
+                state.serverStatus = new Map(Object.entries(cached.st));
+                applyServerDots();
+            }
+        } catch (e) {}
+        try {
+            const r = await fetch('/status-all');
+            const j = await r.json();
+            if (j && j.st && Object.keys(j.st).length) {
+                state.serverStatus = new Map(Object.entries(j.st));
+                try { localStorage.setItem('opentv_chstatus_v1', JSON.stringify({ t: Date.now(), st: j.st })); } catch (e) {}
+                applyServerDots();
+            }
+        } catch (e) {}
+    }
+
+    async function loadMovieGenres() {
+        let usedCache = false;
+        try {
+            const cached = JSON.parse(localStorage.getItem('opentv_mgenres_v1') || 'null');
+            if (cached && Date.now() - cached.t < 86400000 && Array.isArray(cached.mg) && cached.mg.length) {
+                state.movieGenres = new Map(cached.mg);
+                usedCache = true;
+            }
+        } catch (e) {}
+        if (usedCache && state.movieGenres.size > 5000) return; // catalogo quase completo, nao precisa refetch
+        try {
+            const r = await fetch('/genres-all');
+            const j = await r.json();
+            if (j && Array.isArray(j.mg) && j.mg.length > (usedCache ? state.movieGenres.size : 0)) {
+                state.movieGenres = new Map(j.mg);
+                try { localStorage.setItem('opentv_mgenres_v1', JSON.stringify({ t: Date.now(), mg: j.mg })); } catch (e) {}
+                renderMovieFilterPills();
+                renderMovies(state.moviesPage);
+            }
+        } catch (e) {}
+    }
+
+    function applyServerDots() {
+        if (!state.serverStatus.size) return;
+        document.querySelectorAll('.channel-card[data-stream-id]').forEach(card => {
+            const sid = card.getAttribute('data-stream-id');
+            const st = state.serverStatus.get(String(sid));
+            if (!st) return;
+            const dot = card.querySelector('.ch-status-dot');
+            if (!dot) return;
+            dot.className = 'ch-status-dot ' + (st === 'online' ? 'online' : 'offline');
+            dot.title = st === 'online' ? 'No ar' : 'Fora do ar';
+        });
+    }
+
+    window.addEventListener('opentv:live-status', (e) => {
+        const d = e.detail || {};
+        const sid = String(d.streamId || '');
+        if (!sid || !state.serverStatus.size) return;
+        const status = d.ok ? 'online' : 'offline';
+        if (state.serverStatus.get(sid) === status) return;
+        state.serverStatus.set(sid, status);
+        try {
+            const cached = JSON.parse(localStorage.getItem('opentv_chstatus_v1') || 'null');
+            if (cached && cached.st) {
+                cached.st[sid] = status;
+                localStorage.setItem('opentv_chstatus_v1', JSON.stringify(cached));
+            }
+        } catch (err) {}
+        applyServerDots();
+        fetch('/status-report', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ s: sid, ok: !!d.ok })
+        }).catch(() => {});
+    });
+
     async function loadAllData() {
         const [lc, vc, sc, live, movies, series] = await Promise.all([
             safe(() => api.getLiveCategories()), safe(() => api.getVodCategories()), safe(() => api.getSeriesCategories()),
@@ -575,6 +655,8 @@ document.addEventListener('DOMContentLoaded', () => {
         renderSeries(1);
         renderContinueWatching();
         decorateRowScrolls();
+        loadServerStatus();
+        loadMovieGenres();
         navigateTo('live');
     }
 
@@ -603,13 +685,23 @@ document.addEventListener('DOMContentLoaded', () => {
         else renderSeriesFilterPills();
     }
 
-    function renderGroupPills(el, groups, onSelect) {
-        el.innerHTML = '<button class="filter-pill active" data-cat=""><i class="fas fa-border-all"></i> Todos</button>' +
-            groups.map(g => '<button class="filter-pill" data-cat="' + [...g.catIds].join(',') + '"><i class="' + g.icon + '"></i> ' + esc(g.name) + '</button>').join('');
+    function countItemsInGroup(g, items) {
+        const catCount = new Map();
+        items.forEach(m => { const k = String(m.category_id); catCount.set(k, (catCount.get(k) || 0) + 1); });
+        let n = 0;
+        g.catIds.forEach(id => { n += catCount.get(id) || 0; });
+        if (g.extraIds) n += g.extraIds.size;
+        return n;
+    }
+
+    function renderGroupPills(el, groups, onSelect, counter) {
+        el.innerHTML = '<button class="filter-pill active" data-cat=""><i class="fas fa-border-all"></i> Todos' + (counter ? '<span class="pill-count">' + counter.all.toLocaleString('pt-BR') + '</span>' : '') + '</button>' +
+            groups.map(g => '<button class="filter-pill" data-cat="' + [...g.catIds].join(',') + '"><i class="' + g.icon + '"></i> ' + esc(g.name) + (counter ? '<span class="pill-count">' + counter.group(g).toLocaleString('pt-BR') + '</span>' : '') + '</button>').join('');
         el.querySelectorAll('.filter-pill').forEach(p => p.addEventListener('click', () => {
             el.querySelectorAll('.filter-pill').forEach(x => x.classList.remove('active'));
             p.classList.add('active');
-            onSelect(p.dataset.cat || '');
+            const g = groups.find(x => [...x.catIds].join(',') === p.dataset.cat) || null;
+            onSelect(p.dataset.cat || '', g);
         }));
     }
 
@@ -625,7 +717,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (mode === 'genero') {
             const groups = buildVodGenres(state.vodCats);
-            renderGroupPills(genreEl, groups, (catId) => { state.movieGenre = ''; state.movieCat = catId; renderMovies(1); });
+            renderGroupPills(genreEl, groups, (catId, g) => { state.movieGenre = ''; state.movieCat = catId; state.movieCatExtra = g && g.extraIds ? g.extraIds : null; renderMovies(1); }, {
+                all: state.allMovies.length,
+                group: (g) => countItemsInGroup(g, state.allMovies)
+            });
         }
         if (mode === 'ano') {
             const years = [...new Set(state.allMovies.map(m => String(m.year || '')).filter(y => y && y !== '0'))].sort().reverse();
@@ -639,25 +734,34 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (mode === 'streaming') {
             const groups = buildVodPlatforms(state.vodCats);
-            renderGroupPills(catEl, groups, (catId) => { state.movieCat = catId; renderMovies(1); });
+            renderGroupPills(catEl, groups, (catId, g) => { state.movieCat = catId; state.movieCatExtra = g && g.extraIds ? g.extraIds : null; renderMovies(1); }, {
+                all: state.allMovies.length,
+                group: (g) => countItemsInGroup(g, state.allMovies)
+            });
         }
         if (mode === 'todos' || mode === 'cinema') {
             let groups = [...buildVodCollections(state.vodCats), ...buildVodPlatforms(state.vodCats), ...buildVodGenres(state.vodCats)];
             if (mode === 'cinema') groups = groups.filter(g => /lançamento|4k|cinema|legendad/i.test(g.name));
-            renderGroupPills(catEl, groups, (catId) => { state.movieCat = catId; renderMovies(1); });
+            renderGroupPills(catEl, groups, (catId, g) => { state.movieCat = catId; state.movieCatExtra = g && g.extraIds ? g.extraIds : null; renderMovies(1); }, {
+                all: state.allMovies.length,
+                group: (g) => countItemsInGroup(g, state.allMovies)
+            });
         }
     }
 
     // ===== Grupos curados de categorias (provedor manda bagunçado) =====
+    // matching pelo "tail" (depois de | ou :) pra nao vazar (ex: "Animação" dentro de "Ação")
+    function catTail(name) {
+        return String(name || '').split(/[|:]/).pop().replace(/¹+/g, '').trim().toLowerCase();
+    }
     function buildGroupList(cats, defs, catchAllName) {
         const groups = [];
         const seen = new Set();
-        const low = (n) => String(n || '').toLowerCase();
-        const add = (name, icon, re) => {
-            const ids = new Set(cats.filter(c => re.test(low(c.category_name))).map(c => String(c.category_id)));
-            if (ids.size) { groups.push({ name, icon, catIds: ids }); ids.forEach(i => seen.add(i)); }
+        const add = (name, icon, re, genreRe) => {
+            const ids = new Set(cats.filter(c => re.test(catTail(c.category_name))).map(c => String(c.category_id)));
+            if (ids.size) { const g = { name, icon, catIds: ids }; if (genreRe) g.genreRe = genreRe; groups.push(g); ids.forEach(i => seen.add(i)); }
         };
-        defs.forEach(([name, icon, re]) => add(name, icon, re));
+        defs.forEach(([name, icon, re, genreRe]) => add(name, icon, re, genreRe));
         if (catchAllName) {
             const rest = cats.filter(c => !seen.has(String(c.category_id))).map(c => String(c.category_id));
             if (rest.length) groups.push({ name: catchAllName, icon: 'fas fa-layer-group', catIds: new Set(rest) });
@@ -668,7 +772,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Plataformas (filmes e séries compartilham)
     const PLATFORM_DEFS = [
         ['Netflix', 'fab fa-netflix', /netflix/],
-        ['Prime Video', 'fab fa-amazon', /amazon|prime video|\bprime\b/],
+        ['Prime Video', 'fab fa-amazon', /amazon|prime video|^prime\b|\bprime$/],
         ['HBO Max', 'fas fa-circle-play', /hbo/],
         ['Disney+', 'fas fa-wand-magic-sparkles', /disney/],
         ['Apple TV', 'fab fa-apple', /apple/],
@@ -680,30 +784,45 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function buildVodPlatforms(cats) { return buildGroupList(cats, PLATFORM_DEFS); }
 
+    // Gêneros de filmes: catRe = categoria do provedor; genreRe = string de genero enriquecida (get_vod_info)
+    const VOD_GENRE_DEFS = [
+        ['Ação', 'fas fa-person-boxing', /^a[çc][ãa]o|^acao|^action/, /a[çc][ãa]o|action/i],
+        ['Aventura', 'fas fa-mountain', /^aventura|^adventure/, /aventura|adventure/i],
+        ['Comédia', 'fas fa-face-smile', /^com[ée]dia|^comedia|^comedy/, /com[ée]dia|comedia|comedy/i],
+        ['Crime', 'fas fa-user-secret', /^crime|^policia/, /crime/i],
+        ['Drama', 'fas fa-masks-theater', /^drama\b/, /drama/i],
+        ['Terror', 'fas fa-ghost', /^terror|^horror|^medo/, /terror|horror/i],
+        ['Suspense', 'fas fa-user-ninja', /^suspense|^thriller/, /suspense|thriller/i],
+        ['Romance', 'fas fa-heart', /^romance/, /romance/i],
+        ['Ficção & Fantasia', 'fas fa-rocket', /^fic[çc]|^sci.?fi|^fanta/, /fic[çc]a|sci.?fi|fanta/i],
+        ['Animação & Anime', 'fas fa-child', /^anima[çc]|^anime|^desenho/, /anima[çc]|anime/i],
+        ['Família', 'fas fa-people-roof', /^fam[íi]lia|^familia/, /fam[íi]lia|familia/i],
+        ['Documentário', 'fas fa-book-open', /^document/, /document/i],
+        ['Mistério', 'fas fa-magnifying-glass', /^mist[ée]rio|^misterio/, /mist[ée]rio|misterio/i],
+        ['História', 'fas fa-landmark', /^hist[óo]ria|^historia/, /hist[óo]ria|historia/i],
+        ['Faroeste', 'fas fa-hat-cowboy', /^faroeste|^western/, /faroeste|western/i],
+        ['Guerra', 'fas fa-jet-fighter', /^guerra/, /guerra/i],
+        ['Música & Shows', 'fas fa-music', /^m[uú]sica|^musica|^musical|^shows?|^karaoke/, /m[uú]sica|musical/i],
+        ['Clássicos & Retrô', 'fas fa-film', /^cl[áa]ssic|^classic|^retro|^antigos/],
+        ['Nacional', 'fas fa-flag', /^nacional|^brasileir/],
+        ['Religiosos', 'fas fa-church', /^evang|^religios|^gospel|^natal|^jesus|^bibli|^louvor/],
+        ['Coletâneas', 'fas fa-boxes-stacked', /^colet[âa]nea|^coletanea|^mazzaropi|^resident|^batman|^bourne|^star wars|^brinquedo|^jornada|^trapalh|^rocky|^007|^anjos da noite/]
+    ];
+
     function buildVodGenres(cats) {
-        return buildGroupList(cats, [
-            ['Ação', 'fas fa-person-boxing', /a[çc][ãa]o|acao|action/],
-            ['Aventura', 'fas fa-mountain', /aventura|adventure/],
-            ['Comédia', 'fas fa-face-smile', /com[ée]dia|comedy|comedia/],
-            ['Crime', 'fas fa-user-secret', /crime|policia/],
-            ['Drama', 'fas fa-masks-theater', /drama/],
-            ['Terror', 'fas fa-ghost', /terror|horror|medo/],
-            ['Suspense', 'fas fa-user-ninja', /suspense|thriller/],
-            ['Romance', 'fas fa-heart', /romance/],
-            ['Ficção & Fantasia', 'fas fa-rocket', /fic[çc]|sci.?fi|fanta/],
-            ['Animação & Anime', 'fas fa-child', /anima[çc]|anime|desenho/],
-            ['Família', 'fas fa-people-roof', /fam[íi]lia|familia/],
-            ['Documentário', 'fas fa-book-open', /document/],
-            ['Mistério', 'fas fa-magnifying-glass', /mist[ée]rio|misterio/],
-            ['História', 'fas fa-landmark', /hist[óo]ria|historia/],
-            ['Faroeste', 'fas fa-hat-cowboy', /faroeste|western/],
-            ['Guerra', 'fas fa-jet-fighter', /guerra|war\b/],
-            ['Música & Shows', 'fas fa-music', /m[uú]sica|musica|musical|shows?|karaoke/],
-            ['Clássicos & Retrô', 'fas fa-film', /cl[áa]ssic|classic|retro|antigos/],
-            ['Nacional', 'fas fa-flag', /nacional|brasileir/],
-            ['Religiosos', 'fas fa-church', /evang[ée]lic|religios|gospel|natal|jesus|bibli|louvor/],
-            ['Coletâneas', 'fas fa-boxes-stacked', /colet[âa]nea|coletanea|mazzaropi|resident|batman|bourne|star wars|brinquedo|jornada|trapalh|rocky|007|anjos da noite/]
-        ], 'Diversos');
+        const groups = buildGroupList(cats, VOD_GENRE_DEFS, 'Diversos');
+        // enriquecimento: generos reais via get_vod_info (salvos pelo worker)
+        if (state.movieGenres && state.movieGenres.size) {
+            groups.forEach(g => { if (g.genreRe) g.extraIds = new Set(); });
+            state.allMovies.forEach(v => {
+                const gs = state.movieGenres.get(String(v.stream_id));
+                if (!gs) return;
+                for (const g of groups) {
+                    if (g.extraIds && g.genreRe.test(gs)) { g.extraIds.add(String(v.stream_id)); break; }
+                }
+            });
+        }
+        return groups;
     }
 
     function buildVodCollections(cats) {
@@ -718,22 +837,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function buildSeriesGenres(cats) {
         return buildGroupList(cats, [
-            ['Drama', 'fas fa-masks-theater', /drama/],
-            ['Comédia', 'fas fa-face-smile', /com[ée]dia|comedy|comedia/],
-            ['Documentário', 'fas fa-book-open', /document/],
-            ['Animação & Animes', 'fas fa-child', /anima[çc]|anime/],
-            ['Reality Shows', 'fas fa-video', /reality/],
-            ['Crime', 'fas fa-user-secret', /crime/],
-            ['Mistério', 'fas fa-magnifying-glass', /mist[ée]rio|misterio/],
-            ['Novelas & Turcas', 'fas fa-tv', /novela|turca|dorama/],
-            ['Sci-Fi & Fantasia', 'fas fa-rocket', /sci.?fi|fanta|fic[çc]/],
-            ['Ação & Aventura', 'fas fa-person-boxing', /a[çc][ãa]o|acao|action|aventura/],
-            ['Kids & Família', 'fas fa-child-reaching', /kids|fam[íi]lia|familia/],
-            ['Guerra & Política', 'fas fa-jet-fighter', /war\b|politic|guerra/],
-            ['Faroeste', 'fas fa-hat-cowboy', /faroeste|western/],
-            ['Romance', 'fas fa-heart', /romance/],
-            ['Legendadas', 'fas fa-closed-captioning', /legendad/],
-            ['Looke', 'fas fa-clapperboard', /looke/]
+            ['Drama', 'fas fa-masks-theater', /^drama\b/],
+            ['Comédia', 'fas fa-face-smile', /^com[ée]dia|^comedia|^comedy/],
+            ['Documentário', 'fas fa-book-open', /^document/],
+            ['Animação & Animes', 'fas fa-child', /^anima[çc]|^anime/],
+            ['Reality Shows', 'fas fa-video', /^reality/],
+            ['Crime', 'fas fa-user-secret', /^crime/],
+            ['Mistério', 'fas fa-magnifying-glass', /^mist[ée]rio|^misterio/],
+            ['Novelas & Turcas', 'fas fa-tv', /^novela|^turca|^dorama/],
+            ['Sci-Fi & Fantasia', 'fas fa-rocket', /^sci.?fi|^fanta|^fic[çc]/],
+            ['Ação & Aventura', 'fas fa-person-boxing', /^a[çc][ãa]o|^acao|^action|^aventura/],
+            ['Kids & Família', 'fas fa-child-reaching', /^kids|^fam[íi]lia|^familia/],
+            ['Guerra & Política', 'fas fa-jet-fighter', /^war\b|^politic|^guerra/],
+            ['Faroeste', 'fas fa-hat-cowboy', /^faroeste|^western/],
+            ['Romance', 'fas fa-heart', /^romance/],
+            ['Lançamentos', 'fas fa-bolt', /^lan[çc]amento|^lancamento/],
+            ['Legendadas', 'fas fa-closed-captioning', /^legendad/],
+            ['Looke', 'fas fa-clapperboard', /^looke/]
         ], 'Diversos');
     }
 
@@ -749,7 +869,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (mode === 'genero') {
             const groups = buildSeriesGenres(state.seriesCats);
-            renderGroupPills(genreEl, groups, (catId) => { state.seriesGenre = ''; state.seriesCat = catId; renderSeries(1); });
+            renderGroupPills(genreEl, groups, (catId) => { state.seriesGenre = ''; state.seriesCat = catId; renderSeries(1); }, {
+                all: state.allSeries.length,
+                group: (g) => countItemsInGroup(g, state.allSeries)
+            });
         }
         if (mode === 'ano') {
             const years = [...new Set(state.allSeries.map(s => String(s.year || '')).filter(y => y && y !== '0'))].sort().reverse();
@@ -763,11 +886,17 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (mode === 'streaming') {
             const groups = buildSeriesPlatforms(state.seriesCats);
-            renderGroupPills(catEl, groups, (catId) => { state.seriesCat = catId; renderSeries(1); });
+            renderGroupPills(catEl, groups, (catId) => { state.seriesCat = catId; renderSeries(1); }, {
+                all: state.allSeries.length,
+                group: (g) => countItemsInGroup(g, state.allSeries)
+            });
         }
         if (mode === 'todos') {
             const groups = [...buildSeriesPlatforms(state.seriesCats), ...buildSeriesGenres(state.seriesCats)];
-            renderGroupPills(catEl, groups, (catId) => { state.seriesCat = catId; renderSeries(1); });
+            renderGroupPills(catEl, groups, (catId) => { state.seriesCat = catId; renderSeries(1); }, {
+                all: state.allSeries.length,
+                group: (g) => countItemsInGroup(g, state.allSeries)
+            });
         }
     }
 
@@ -779,7 +908,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (state.movieCat) {
             const ids = new Set(String(state.movieCat).split(',').filter(Boolean));
-            filtered = filtered.filter(m => ids.has(String(m.category_id)) || (m.category_ids || []).some(x => ids.has(String(x))));
+            const extra = state.movieCatExtra;
+            filtered = filtered.filter(m => ids.has(String(m.category_id)) || (m.category_ids || []).some(x => ids.has(String(x))) || (extra && extra.has(String(m.stream_id))));
         }
         return filtered;
     }
@@ -1141,14 +1271,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const c = $('channel-list');
         if (!channels.length) { c.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><i class="fas fa-tv"></i><p>Nenhum canal encontrado</p></div>'; return; }
         c.innerHTML = '';
+        const lc = document.getElementById('live-count');
+        if (lc) lc.textContent = channels.length.toLocaleString('pt-BR');
         if (channels.length && channels[0].stream_id) loadEpgForChannel(channels[0].stream_id);
+        const useServer = state.serverStatus.size > 100; // dados do servidor disponiveis: nao gasta conexao do usuario
         // Render em blocos (nao trava a UI com 1488 cards de uma vez)
         const CHUNK = 60;
         let idx = 0;
         const io = ('IntersectionObserver' in window) ? new IntersectionObserver((entries) => {
             entries.forEach(entry => {
                 if (entry.isIntersecting) {
-                    probeChannelStatus(entry.target);
+                    if (!useServer) probeChannelStatus(entry.target);
                     loadMiniEpg(entry.target);
                     io.unobserve(entry.target);
                 }
@@ -1178,7 +1311,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (!io) {
             c.querySelectorAll('.channel-card[data-stream-id]').forEach(card => {
-                probeChannelStatus(card);
+                if (!useServer) probeChannelStatus(card);
                 loadMiniEpg(card);
             });
         }
@@ -1282,7 +1415,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const hasIcon = stream.stream_icon && stream.stream_icon.trim();
         const cat = ContentFilter.cleanCategoryName(stream.category_name || '');
         const logoSrc = hasIcon ? safeImg(stream.stream_icon) : PLACEHOLDER_IMG;
-        card.innerHTML = '<span class="ch-number">#' + num + '</span><img class="ch-logo" src="' + logoSrc + '" loading="lazy" decoding="async" referrerpolicy="no-referrer" alt="" onerror="this.onerror=null;this.src=\'assets/images/placeholder.svg\'"><div class="ch-info"><div class="ch-name">' + esc(stream.name) + '</div><div class="ch-category">' + esc(cat) + '<span class="ch-epg-mini" data-epg-for="' + stream.stream_id + '"></span></div></div><button class="ch-guide" title="Programação"><i class="fas fa-list-ul"></i></button><div class="ch-status-dot ' + (hasIcon ? 'warning' : 'offline') + '" title="Status do canal"></div>';
+        const srvSt = state.serverStatus.size ? state.serverStatus.get(String(stream.stream_id)) : null;
+        const dotCls = srvSt === 'online' ? 'online' : srvSt === 'offline' ? 'offline' : (hasIcon ? 'warning' : 'warning');
+        const dotTitle = srvSt === 'online' ? 'No ar' : srvSt === 'offline' ? 'Fora do ar' : 'Verificando...';
+        card.innerHTML = '<span class="ch-number">#' + num + '</span><img class="ch-logo" src="' + logoSrc + '" loading="lazy" decoding="async" referrerpolicy="no-referrer" alt="" onerror="this.onerror=null;this.src=\'assets/images/placeholder.svg\'"><div class="ch-info"><div class="ch-name">' + esc(stream.name) + '</div><div class="ch-category">' + esc(cat) + '<span class="ch-epg-mini" data-epg-for="' + stream.stream_id + '"></span></div></div><button class="ch-guide" title="Programação"><i class="fas fa-list-ul"></i></button><div class="ch-status-dot ' + dotCls + '" title="' + dotTitle + '"></div>';
         card.addEventListener('click', () => {
             const play = () => {
                 WatchStore.record('live', stream.stream_id, stream.name);
@@ -1313,6 +1449,8 @@ document.addEventListener('DOMContentLoaded', () => {
         c.innerHTML = slice.length ? '' : '<div class="empty-state" style="grid-column:1/-1"><i class="fas fa-film"></i><p>Nenhum filme encontrado</p></div>';
         slice.forEach(m => c.appendChild(createCard(m, 'movie')));
         renderPagination('movies-pagination', filtered.length, page, (p) => renderMovies(p));
+        const mc = document.getElementById('movies-count');
+        if (mc) mc.textContent = filtered.length.toLocaleString('pt-BR');
         document.getElementById('section-movies')?.scrollTo(0, 0);
     }
 
@@ -1327,6 +1465,8 @@ document.addEventListener('DOMContentLoaded', () => {
         c.innerHTML = slice.length ? '' : '<div class="empty-state" style="grid-column:1/-1"><i class="fas fa-play-circle"></i><p>Nenhuma serie encontrada</p></div>';
         slice.forEach(s => c.appendChild(createCard(s, 'series')));
         renderPagination('series-pagination', filtered.length, page, (p) => renderSeries(p));
+        const sc = document.getElementById('series-count');
+        if (sc) sc.textContent = filtered.length.toLocaleString('pt-BR');
         document.getElementById('section-series')?.scrollTo(0, 0);
     }
 

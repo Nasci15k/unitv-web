@@ -75,6 +75,7 @@ class VideoPlayer {
         this.videoEl?.addEventListener('dblclick', () => this.toggleFullscreen());
         this.videoEl?.addEventListener('timeupdate', () => this.updateTime());
         this.videoEl?.addEventListener('ended', () => this.saveProgressNow());
+        this.videoEl?.addEventListener('playing', () => this._reportLive(true));
 
         document.getElementById('btn-resume-continue')?.addEventListener('click', () => {
             const pos = this._pendingResume || 0;
@@ -178,6 +179,7 @@ class VideoPlayer {
         this._inMkvFallback = false;
         if (this._mkvMpegtsTimer) { clearTimeout(this._mkvMpegtsTimer); this._mkvMpegtsTimer = null; }
         this.currentStreamId = opts.streamId != null ? opts.streamId : null;
+        this._liveStatusSent = false;
         this.resumeAt = 0;
         this._pendingResume = opts.resumeAt > 0 && !this.isLive ? opts.resumeAt : 0;
         this.titleEl.textContent = title;
@@ -1125,10 +1127,19 @@ class VideoPlayer {
         }
     }
 
+    _reportLive(ok) {
+        if (!this.isLive || !this.currentStreamId || this._liveStatusSent === true && ok) return;
+        if (ok) this._liveStatusSent = true;
+        try {
+            window.dispatchEvent(new CustomEvent('opentv:live-status', { detail: { streamId: String(this.currentStreamId), ok: !!ok } }));
+        } catch (e) {}
+    }
+
     showErrorMessage(msg) {
         this.loader.classList.add('hidden');
         this.errorText.textContent = msg;
         this.errorBox.classList.remove('hidden');
+        this._reportLive(false);
     }
 
     retry() {
