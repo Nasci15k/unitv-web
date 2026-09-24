@@ -101,22 +101,27 @@ async function enrichGenres() {
     try { vods = await api('action=get_vod_streams'); } catch (e) { log('get_vod_streams falhou', e.message); return; }
     if (!Array.isArray(vods)) return;
     let existing = [];
-    try { existing = await supaSelectAll('movie_genres', 'stream_id'); } catch (e) { log('leitura movie_genres falhou (tabela existe?)', e.message); return; }
+    try { existing = await supaSelectAll('vod_meta', 'stream_id'); } catch (e) { log('leitura vod_meta falhou (tabela existe?)', e.message); return; }
     const done = new Set(existing.map(r => String(r.stream_id)));
     const todo = vods.filter(v => !done.has(String(v.stream_id))).slice(0, ENRICH_BATCH);
-    if (!todo.length) { log('generos: nada a enriquecer'); return; }
-    log(`generos: enriquecendo ${todo.length} filmes (feito: ${done.size}/${vods.length})...`);
+    if (!todo.length) { log('meta: nada a enriquecer'); return; }
+    log(`meta: enriquecendo ${todo.length} filmes (feito: ${done.size}/${vods.length})...`);
     const rows = [];
     await mapLimit(todo, ENRICH_CONCURRENCY, async (v) => {
         try {
             const j = await api('action=get_vod_info&vod_id=' + v.stream_id);
-            const genres = String((j && j.info && j.info.genre) || '').trim();
-            if (genres) rows.push({ stream_id: String(v.stream_id), genres: genres.substring(0, 120), updated_at: new Date().toISOString() });
+            const info = (j && j.info) || {};
+            const genres = String(info.genre || '').trim();
+            let year = String(info.releasedate || info.year || v.year || '').trim().substring(0, 4);
+            if (!/^(19|20)\d{2}$/.test(year)) year = '';
+            if (genres || year) {
+                rows.push({ stream_id: String(v.stream_id), kind: 'movie', genres: genres.substring(0, 120), year, updated_at: new Date().toISOString() });
+            }
         } catch (e) { /* skip */ }
     });
     if (rows.length) {
-        try { await supaUpsert('movie_genres', rows); log(`generos: +${rows.length} salvos (${Math.round((Date.now() - t0) / 1000)}s)`); }
-        catch (e) { log('erro ao salvar generos', e.message); }
+        try { await supaUpsert('vod_meta', rows); log(`meta: +${rows.length} salvos (${Math.round((Date.now() - t0) / 1000)}s)`); }
+        catch (e) { log('erro ao salvar meta', e.message); }
     }
 }
 

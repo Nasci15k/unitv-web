@@ -72,10 +72,10 @@ export default async (request, context) => {
 
     if (pathname === '/genres-all') {
         let rows = null;
-        try { rows = await selectAll('movie_genres', 'stream_id,genres'); }
+        try { rows = await selectAll('vod_meta', 'stream_id,kind,genres,year'); }
         catch (e) { rows = null; }
         if (rows === null) return json({ mg: [], n: 0 });
-        const mg = rows.map(r => [r.stream_id, r.genres || '']);
+        const mg = rows.map(r => [r.stream_id, r.kind || 'movie', r.genres || '', r.year || '']);
         return json({ mg, n: mg.length }, 200, 'public, max-age=120');
     }
 

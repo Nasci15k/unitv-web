@@ -542,7 +542,8 @@ class VideoPlayer {
                             console.log('[HLS] Codec not supported by MSE:', codecInfo || 'unknown');
                             this.hls.destroy(); this.hls = null;
                             if (hevc) {
-                                this.showErrorMessage('Video HEVC (H.265) nao suportado por este navegador. Tente outro canal ou qualidade.');
+                                this.showErrorMessage('Canal em HEVC (H.265). Procurando versão compatível...');
+                                this._hevcFallback();
                             } else {
                                 this._hlsToFallback(url);
                             }
@@ -1132,6 +1133,13 @@ class VideoPlayer {
         if (ok) this._liveStatusSent = true;
         try {
             window.dispatchEvent(new CustomEvent('opentv:live-status', { detail: { streamId: String(this.currentStreamId), ok: !!ok } }));
+        } catch (e) {}
+    }
+
+    // Canal HEVC sem suporte no navegador: pede pro app trocar pela versao H.264 do canal
+    _hevcFallback() {
+        try {
+            window.dispatchEvent(new CustomEvent('opentv:hevc-fallback', { detail: { streamId: String(this.currentStreamId || ''), title: this.currentTitle || '' } }));
         } catch (e) {}
     }
 
