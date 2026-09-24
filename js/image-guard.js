@@ -6,7 +6,9 @@
         'loopstatic.net': 1,
         '32q0d.xyz': 1,
         'fenix7.com': 1,
-        'imagizer.imageshack.com': 1
+        'imagizer.imageshack.com': 1,
+        'cplay2.live': 1,
+        'cplay.live': 1
     };
 
     function isDeadHost(url) {

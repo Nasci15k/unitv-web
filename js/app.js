@@ -14,7 +14,7 @@
 
     const PER_PAGE = 48;
     const PLACEHOLDER_IMG = 'assets/images/placeholder.svg';
-    const DEAD_IMG_HOSTS = { 'logos.imperioapps.xyz': 1, 'loopstatic.net': 1, '32q0d.xyz': 1, 'fenix7.com': 1, 'imagizer.imageshack.com': 1 };
+    const DEAD_IMG_HOSTS = { 'logos.imperioapps.xyz': 1, 'loopstatic.net': 1, '32q0d.xyz': 1, 'fenix7.com': 1, 'imagizer.imageshack.com': 1, 'cplay2.live': 1, 'cplay.live': 1 };
     function safeImg(url) {
         if (!url || !url.trim()) return PLACEHOLDER_IMG;
         try {
