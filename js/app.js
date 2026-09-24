@@ -41,11 +41,38 @@
         return 'https://www.youtube.com/results?search_query=' + encodeURIComponent((title || '') + ' trailer oficial');
     }
     const OMDB_KEY = (window.OPENTV_CONFIG && window.OPENTV_CONFIG.OMDB_API_KEY) || '';
+    // Cache persistente (localStorage) — estica o limite diario do OMDb
+    let _omdbPersist = {};
+    try { _omdbPersist = JSON.parse(localStorage.getItem('opentv_omdb_cache') || '{}'); } catch (e) { _omdbPersist = {}; }
+    let _omdbPersistTimer = null;
+    function _omdbPersistSave() {
+        if (_omdbPersistTimer) return;
+        _omdbPersistTimer = setTimeout(() => {
+            _omdbPersistTimer = null;
+            try {
+                const keys = Object.keys(_omdbPersist);
+                if (keys.length > 900) keys.slice(0, keys.length - 700).forEach(k => delete _omdbPersist[k]);
+                localStorage.setItem('opentv_omdb_cache', JSON.stringify(_omdbPersist));
+            } catch (e) {}
+        }, 1200);
+    }
     const omdbCache = new Map();
+    const omdbSeasonCache = new Map();
+    function omdbGet(key) {
+        if (omdbCache.has(key)) return omdbCache.get(key);
+        if (key in _omdbPersist) { const v = _omdbPersist[key]; omdbCache.set(key, v); return v; }
+        return undefined;
+    }
+    function omdbSet(key, val) {
+        omdbCache.set(key, val);
+        _omdbPersist[key] = val;
+        _omdbPersistSave();
+    }
     async function omdbLookup(title, year, type) {
         if (!OMDB_KEY || !title) return null;
-        const key = title + '|' + (year || '') + '|' + (type || '');
-        if (omdbCache.has(key)) return omdbCache.get(key);
+        const key = 't|' + title + '|' + (year || '') + '|' + (type || '');
+        const cached = omdbGet(key);
+        if (cached !== undefined) return cached;
         try {
             let u = 'https://www.omdbapi.com/?apikey=' + OMDB_KEY + '&t=' + encodeURIComponent(title.replace(/\s*\(\d{4}\)\s*$/, ''));
             if (year) u += '&y=' + year;
@@ -53,22 +80,22 @@
             const res = await fetch(u);
             const j = await res.json();
             const out = (j && j.Response === 'True') ? j : null;
-            omdbCache.set(key, out);
+            omdbSet(key, out);
             return out;
-        } catch (e) { omdbCache.set(key, null); return null; }
+        } catch (e) { omdbSet(key, null); return null; }
     }
-    const omdbSeasonCache = new Map();
     async function omdbSeason(imdbID, season) {
         if (!OMDB_KEY || !imdbID || !season) return null;
-        const k = imdbID + '|' + season;
-        if (omdbSeasonCache.has(k)) return omdbSeasonCache.get(k);
+        const key = 's|' + imdbID + '|' + season;
+        const cached = omdbGet(key);
+        if (cached !== undefined) return cached;
         try {
             const res = await fetch('https://www.omdbapi.com/?apikey=' + OMDB_KEY + '&i=' + encodeURIComponent(imdbID) + '&Season=' + season);
             const j = await res.json();
             const out = (j && j.Response === 'True' && Array.isArray(j.Episodes)) ? j : null;
-            omdbSeasonCache.set(k, out);
+            omdbSet(key, out);
             return out;
-        } catch (e) { omdbSeasonCache.set(k, null); return null; }
+        } catch (e) { omdbSet(key, null); return null; }
     }
     function qualityBadge(name) {
         const n = String(name || '').toUpperCase();
