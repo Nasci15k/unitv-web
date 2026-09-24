@@ -19,8 +19,9 @@ async function selectAll(table, select) {
             headers: HDRS,
             signal: AbortSignal.timeout(15000)
         });
+        if (!res.ok) return null; // tabela nao existe (ou erro) — distinguir de "vazia"
         const j = await res.json().catch(() => null);
-        if (!Array.isArray(j)) break;
+        if (!Array.isArray(j)) return null;
         rows.push(...j);
         if (j.length < 1000) break;
     }
@@ -49,9 +50,10 @@ export default async (request, context) => {
     }
 
     if (pathname === '/status-all') {
-        let rows = [];
+        let rows = null;
         try { rows = await selectAll('channel_status', 'stream_id,status,checked_at'); }
-        catch (e) { return json({ st: {}, stale: true }); }
+        catch (e) { rows = null; }
+        if (rows === null) return json({ st: {}, noTable: true }); // tabela nao existe ainda — nao dispara worker
         const st = {};
         let oldest = null;
         rows.forEach(r => {
@@ -69,9 +71,10 @@ export default async (request, context) => {
     }
 
     if (pathname === '/genres-all') {
-        let rows = [];
+        let rows = null;
         try { rows = await selectAll('movie_genres', 'stream_id,genres'); }
-        catch (e) { return json({ mg: [], n: 0 }); }
+        catch (e) { rows = null; }
+        if (rows === null) return json({ mg: [], n: 0 });
         const mg = rows.map(r => [r.stream_id, r.genres || '']);
         return json({ mg, n: mg.length }, 200, 'public, max-age=120');
     }
