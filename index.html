@@ -93,6 +93,10 @@
                             <div id="live-categories"></div>
                         </aside>
                         <div class="live-main">
+                            <div class="live-header">
+                                <div class="live-header-title" id="live-cat-current">Todos os Canais</div>
+                                <div class="live-header-sub" id="live-cat-sub">Sinal ao vivo</div>
+                            </div>
                             <div id="live-epg-bar" class="live-epg-bar hidden">
                                 <div class="epg-now">
                                     <span class="epg-label">NO AR:</span>
@@ -429,6 +433,15 @@
             </div>
         </div>
     </div>
+
+    <!-- Mobile bottom navigation -->
+    <nav class="bottom-nav" id="bottom-nav">
+        <li class="nav-item" data-section="destaques"><i class="fas fa-star"></i><span>Destaques</span></li>
+        <li class="nav-item" data-section="live"><i class="fas fa-tv"></i><span>TV</span></li>
+        <li class="nav-item" data-section="movies"><i class="fas fa-film"></i><span>Filmes</span></li>
+        <li class="nav-item" data-section="series"><i class="fas fa-play-circle"></i><span>Séries</span></li>
+        <li class="nav-item" data-section="search"><i class="fas fa-search"></i><span>Buscar</span></li>
+    </nav>
 
     <script src="js/api.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>

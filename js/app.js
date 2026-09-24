@@ -414,6 +414,7 @@
         renderMovies(1);
         renderSeries(1);
         renderContinueWatching();
+        decorateRowScrolls();
         navigateTo('live');
     }
 
@@ -544,6 +545,35 @@
             filtered = filtered.filter(s => String(s.category_id) === String(state.seriesCat));
         }
         return filtered;
+    }
+
+    // Period check for row scroll arrows
+    function decorateRowScrolls() {
+        document.querySelectorAll('.row-scroll').forEach(row => {
+            if (row.parentElement && row.parentElement.classList.contains('row-scroll-wrap')) return;
+            const wrap = document.createElement('div');
+            wrap.className = 'row-scroll-wrap';
+            row.parentNode.insertBefore(wrap, row);
+            wrap.appendChild(row);
+            const prev = document.createElement('button');
+            prev.className = 'row-scroll-btn prev';
+            prev.innerHTML = '<i class="fas fa-chevron-left"></i>';
+            prev.addEventListener('click', () => row.scrollBy({ left: -row.clientWidth * 0.8, behavior: 'smooth' }));
+            const next = document.createElement('button');
+            next.className = 'row-scroll-btn next';
+            next.innerHTML = '<i class="fas fa-chevron-right"></i>';
+            next.addEventListener('click', () => row.scrollBy({ left: row.clientWidth * 0.8, behavior: 'smooth' }));
+            wrap.appendChild(prev);
+            wrap.appendChild(next);
+            const upd = () => {
+                const max = row.scrollWidth - row.clientWidth - 2;
+                prev.classList.toggle('hidden', row.scrollLeft <= 4);
+                next.classList.toggle('hidden', row.scrollLeft >= max);
+            };
+            row.addEventListener('scroll', upd, { passive: true });
+            new MutationObserver(upd).observe(row, { childList: true });
+            setTimeout(upd, 400);
+        });
     }
 
     function renderHome() {
@@ -732,18 +762,41 @@
         } catch (e) { epgMiniCache.set(streamId, null); return null; }
     }
 
+    const CAT_ICONS = [
+        [/filme|cinema|movie/i, 'fa-film'], [/s[eé]rie|novela|dorama/i, 'fa-clapperboard'],
+        [/esporte|sport|futebol/i, 'fa-futbol'], [/not[ií]cia|jornal|news/i, 'fa-newspaper'],
+        [/kids|infantil|desenho|anima/i, 'fa-child'], [/m[uú]sica|music|radio|web r[aá]dio/i, 'fa-music'],
+        [/document[áa]rio|doc\b/i, 'fa-book-open'], [/variedade|programa|show|entreter/i, 'fa-masks-theater'],
+        [/reality/i, 'fa-camera'], [/religios|gospel|f[eé]/i, 'fa-church'],
+        [/24h|24 ?hs|maratona/i, 'fa-clock-rotate-left'], [/nacional|aberta|sinal/i, 'fa-tower-broadcast'],
+        [/esportivo|premiere|combate|mma|ufc/i, 'fa-person-boxing'], [/cozinha|gastro/i, 'fa-utensils'],
+        [/cultura|arte|educ/i, 'fa-palette'], [/moda|fashion/i, 'fa-shirt'],
+        [/tecnologia|tech|game/i, 'fa-microchip'], [/cobertura|internacional|mundo/i, 'fa-globe'],
+        [/anime/i, 'fa-dragon'], [/sertanejo|sertanej/i, 'fa-guitar'], [/multicanais/i, 'fa-list']
+    ];
+    function catIcon(name, fallback) {
+        for (const [re, icon] of CAT_ICONS) { if (re.test(name || '')) return icon; }
+        return fallback || 'fa-tag';
+    }
+
     function renderLiveSidebar() {
         const c = $('live-categories');
-        c.innerHTML = '<button class="live-category-btn active" data-cat=""><i class="fas fa-th"></i> Todos</button>';
-        state.liveCats.forEach(cat => {
-            c.innerHTML += '<button class="live-category-btn" data-cat="' + cat.category_id + '"><i class="fas fa-tag"></i> ' + esc(cat.category_name) + '</button>';
-        });
+        const counts = new Map();
+        state.allLive.forEach(s => { const k = String(s.category_id); counts.set(k, (counts.get(k) || 0) + 1); });
+        c.innerHTML = '<button class="live-category-btn active" data-cat=""><i class="fas fa-border-all"></i> <span class="live-cat-name">Todos os Canais</span><span class="live-cat-count">' + state.allLive.length + '</span></button>' +
+            state.liveCats.map(cat => '<button class="live-category-btn" data-cat="' + cat.category_id + '"><i class="fas ' + catIcon(cat.category_name) + '"></i> <span class="live-cat-name">' + esc(cat.category_name) + '</span><span class="live-cat-count">' + (counts.get(String(cat.category_id)) || 0) + '</span></button>').join('');
         c.querySelectorAll('.live-category-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 c.querySelectorAll('.live-category-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 filterLive(btn.dataset.cat);
             });
+        });
+        // Categoria atual no header da grade
+        c.addEventListener('click', () => {
+            const act = c.querySelector('.live-category-btn.active .live-cat-name');
+            const t = $('live-cat-current');
+            if (t && act) t.textContent = act.textContent;
         });
     }
 
@@ -1124,7 +1177,12 @@
     function renderPills(containerId, cats, onSelect) {
         const c = document.getElementById(containerId);
         if (!c) return;
-        c.innerHTML = '<button class="filter-pill active" data-cat="">Todos</button>' + cats.slice(0, 25).map(cat => '<button class="filter-pill" data-cat="' + cat.category_id + '">' + esc(cat.category_name) + '</button>').join('');
+        const all = containerId.indexOf('movie') === 0 ? state.allMovies : containerId.indexOf('series') === 0 ? state.allSeries : null;
+        const counts = all ? new Map() : null;
+        if (all) all.forEach(m => { const k = String(m.category_id); counts.set(k, (counts.get(k) || 0) + 1); });
+        const total = counts ? [...counts.values()].reduce((a, b) => a + b, 0) : 0;
+        c.innerHTML = '<button class="filter-pill active" data-cat=""><i class="fas fa-border-all"></i> Todos' + (counts ? '<span class="pill-count">' + total + '</span>' : '') + '</button>' +
+            cats.slice(0, 40).map(cat => '<button class="filter-pill" data-cat="' + cat.category_id + '">' + esc(cat.category_name) + (counts ? '<span class="pill-count">' + (counts.get(String(cat.category_id)) || '') + '</span>' : '') + '</button>').join('');
         c.querySelectorAll('.filter-pill').forEach(pill => {
             pill.addEventListener('click', () => {
                 c.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
