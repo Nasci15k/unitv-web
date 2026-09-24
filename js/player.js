@@ -519,7 +519,7 @@ class VideoPlayer {
                     case Hls.ErrorTypes.NETWORK_ERROR:
                         // .m3u8 que na verdade e TS cru: retry nao tem sentido, vai direto pro mpegts
                         if (data.details === 'levelParsingError') {
-                            console.log('[HLS] Manifest invalido (TS cru?) â€” caindo pro mpegts');
+                            console.log('[HLS] Manifest invalido (TS cru?) — caindo pro mpegts');
                             this.hls.destroy(); this.hls = null;
                             this._hlsToFallback(url);
                             return;
@@ -967,7 +967,7 @@ class VideoPlayer {
             const watchdog = setInterval(() => {
                 if (aborted || ready) { clearInterval(watchdog); return; }
                 if (fedBytes > 60 * 1024 * 1024) {
-                    console.error('[MSE] No moov after 60MB â€” aborting');
+                    console.error('[MSE] No moov after 60MB — aborting');
                     this.showErrorMessage('Formato nao suportado (sem moov/MP4).');
                     cleanup();
                     clearInterval(watchdog);
@@ -979,7 +979,7 @@ class VideoPlayer {
                 if (!response.ok) throw new Error('HTTP ' + response.status);
                 const ctype = (response.headers.get('content-type') || '').toLowerCase();
                 if (ctype.includes('matroska') || ctype.includes('mkv')) {
-                    console.error('[MSE] MKV content-type detected â€” attempting mpegts fallback');
+                    console.error('[MSE] MKV content-type detected — attempting mpegts fallback');
                     cleanup();
                     this.tryMkvFallback(url);
                     return;
@@ -996,7 +996,7 @@ class VideoPlayer {
                         if (firstChunk) {
                             firstChunk = false;
                             if (value.length >= 4 && value[0] === 0x1A && value[1] === 0x45 && value[2] === 0xDF && value[3] === 0xA3) {
-                                console.error('[MSE] EBML/MKV magic detected â€” attempting mpegts fallback');
+                                console.error('[MSE] EBML/MKV magic detected — attempting mpegts fallback');
                                 cleanup();
                                 this.tryMkvFallback(url);
                                 return;
@@ -1049,7 +1049,7 @@ class VideoPlayer {
 
     showMkvError() {
         this._inMkvFallback = false;
-        this.showErrorMessage('NÃ£o foi possÃ­vel reproduzir este vÃ­deo (MKV). Formato MKV nÃ£o suportado pelo navegador.');
+        this.showErrorMessage('Não foi possível reproduzir este vídeo (MKV). Formato MKV não suportado pelo navegador.');
     }
 
     tryMkvFallback(url) {

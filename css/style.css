@@ -206,7 +206,7 @@ html,body{height:100%;font-family:var(--font);background:var(--bg-0);color:var(-
 .epg-action-btn:hover{border-color:var(--accent);color:var(--accent-soft);transform:scale(1.06)}
 .epg-action-btn.active{background:var(--accent);border-color:transparent;color:#fff}
 
-/* ============ EPG MODAL (ProgramaÃ§Ã£o) ============ */
+/* ============ EPG MODAL (Programação) ============ */
 .epg-box{width:min(680px,94vw);max-height:86vh;display:flex;flex-direction:column;padding:22px}
 .epg-modal-head{display:flex;align-items:center;gap:14px;margin-bottom:16px;padding-right:40px}
 .epg-modal-logo{width:56px;height:56px;border-radius:12px;object-fit:contain;background:rgba(255,255,255,.06);padding:6px;flex-shrink:0}
@@ -304,7 +304,7 @@ html,body{height:100%;font-family:var(--font);background:var(--bg-0);color:var(-
 .season-pill:hover{border-color:rgba(229,9,20,.5);color:#fff}
 .season-pill.active{background:var(--accent);border-color:transparent;color:#fff}
 
-/* episodes â€” lista Netflix com stills */
+/* episodes — lista Netflix com stills */
 .episodes-grid{display:grid;gap:12px;grid-template-columns:1fr}
 .episode-card{display:flex;align-items:flex-start;gap:16px;padding:12px;background:var(--surface);border-radius:12px;cursor:pointer;transition:var(--transition);border:1px solid transparent}
 .episode-card:hover{background:var(--surface-2);border-color:var(--border-hover);transform:translateX(4px)}
