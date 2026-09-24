@@ -65,7 +65,10 @@
     }
     function cleanEpTitle(t, epNum) {
         if (!t) return 'Episódio ' + epNum;
-        let s = String(t).replace(/^S\d+\s*E\d+\s*-\s*/i, '').replace(/\s*S\d+E\d+\s*$/i, '').trim();
+        let s = String(t);
+        const m = s.match(/S\d+E\d+\s*[-–]\s*(.+)$/i);
+        if (m && m[1]) s = m[1];
+        s = s.replace(/^S\d+\s*E\d+\s*[-–]\s*/i, '').replace(/\s*[-–]\s*S\d+E\d+\s*$/i, '').replace(/^S\d+E\d+\s*/i, '').trim();
         return s || 'Episódio ' + epNum;
     }
     const state = { section: 'live', allLive: [], allMovies: [], allSeries: [], liveCats: [], vodCats: [], seriesCats: [], moviesPage: 1, seriesPage: 1, movieSection: 'general', seriesSection: 'general', liveSection: 'general', movieFilterMode: 'todos', seriesFilterMode: 'todos', movieGenre: '', movieYear: '', seriesGenre: '', seriesYear: '', movieCat: '', seriesCat: '', favTab: 'favorites', searchType: '', historyDeleteMode: false, adultUnlocked: false, currentEpg: null, jogosLoaded: false, jogosDateIdx: 0, jogosGames: [], jogosComps: {}, jogosCountries: {}, filterSel: { tipo: 'Filmes', genero: 'Todos', ano: 'Todos' } };
@@ -1417,11 +1420,12 @@
         const eps = allEpisodes[seasonNum] || [];
         const c = $('episodes-grid');
         if (!eps.length) { c.innerHTML = '<div class="empty-state"><p>Nenhum episódio encontrado</p></div>'; return; }
-        c.innerHTML = eps.map(ep => {
+        c.innerHTML = eps.map((ep, idx) => {
+            const epNum = ep.episode_number ?? ep.episode_num ?? (idx + 1);
             const still = safeImg(ep.info?.movie_image || ep.info?.cover_big || '');
             const dur = ep.info?.duration || '';
             const plot = ep.info?.plot || '';
-            const epTitle = cleanEpTitle(ep.title, ep.episode_number);
+            const epTitle = cleanEpTitle(ep.title, epNum);
             const prog = WatchStore.getProgress('series', ep.id);
             const pct = prog && !prog.isCompleted && prog.lastWatchedPosition > 5 && prog.totalDuration > 0 ? Math.min(100, (prog.lastWatchedPosition / prog.totalDuration) * 100) : 0;
             return '<div class="episode-card" data-id="' + ep.id + '" data-title="' + esc(epTitle) + '" data-ext="' + esc(ep.container_extension || 'mp4') + '" data-fulltitle="' + esc(ep.title || '') + '">' +
@@ -1431,7 +1435,7 @@
                 (pct ? '<div class="ep-progress"><div style="width:' + pct + '%"></div></div>' : '') +
                 '</div>' +
                 '<div class="ep-info">' +
-                '<div class="ep-name"><span class="ep-num-chip">E' + ep.episode_number + '</span> ' + esc(epTitle) + '</div>' +
+                '<div class="ep-name"><span class="ep-num-chip">E' + epNum + '</span> ' + esc(epTitle) + '</div>' +
                 '<div class="ep-meta">' + (dur ? '<i class="fas fa-clock"></i> ' + esc(dur) : '') + '</div>' +
                 (plot ? '<div class="ep-plot">' + esc(plot.substring(0, 180)) + (plot.length > 180 ? '…' : '') + '</div>' : '') +
                 '</div></div>';
