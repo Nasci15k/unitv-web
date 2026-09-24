@@ -76,6 +76,24 @@ class VideoPlayer {
         this.videoEl?.addEventListener('timeupdate', () => this.updateTime());
         this.videoEl?.addEventListener('ended', () => this.saveProgressNow());
         this.videoEl?.addEventListener('playing', () => this._reportLive(true));
+        this.videoEl?.addEventListener('ended', () => this._onLiveEnded());
+
+        // Watchdog de congelamento (live): o proxy corta streams longos (~60s); se o video
+        // parar de avancar por ~9s sem ser pause/seek, reconecta invisivelmente
+        this._stallLastTime = 0;
+        this._stallStrikes = 0;
+        setInterval(() => {
+            if (!this.isLive || !this.currentUrl || !this.videoEl) return;
+            if (this.videoEl.paused || this.videoEl.seeking) { this._stallStrikes = 0; return; }
+            const ct = this.videoEl.currentTime;
+            if (ct > this._stallLastTime + 0.2) { this._stallLastTime = ct; this._stallStrikes = 0; return; }
+            this._stallStrikes++;
+            if (this._stallStrikes >= 3) {
+                this._stallStrikes = 0;
+                console.log('[LIVE] Stall detectado — reconectando stream');
+                this._restartLive();
+            }
+        }, 3000);
 
         document.getElementById('btn-resume-continue')?.addEventListener('click', () => {
             const pos = this._pendingResume || 0;
@@ -180,6 +198,8 @@ class VideoPlayer {
         if (this._mkvMpegtsTimer) { clearTimeout(this._mkvMpegtsTimer); this._mkvMpegtsTimer = null; }
         this.currentStreamId = opts.streamId != null ? opts.streamId : null;
         this._liveStatusSent = false;
+        this._restartCount = 0;
+        this._lastLiveEngine = null;
         this.resumeAt = 0;
         this._pendingResume = opts.resumeAt > 0 && !this.isLive ? opts.resumeAt : 0;
         this.titleEl.textContent = title;
@@ -401,14 +421,16 @@ class VideoPlayer {
             }, {
                 enableWorker: !(/Mobi|Android/i.test(navigator.userAgent || '')),
                 enableStashBuffer: true,
-                stashInitialSize: 128,
+                stashInitialSize: 384,
                 autoCleanupSourceBuffer: true,
                 autoCleanupMaxBackwardDuration: 30,
                 autoCleanupMinBackwardDuration: 10,
                 liveBufferLatencyChasing: this.isLive,
-                liveBufferLatencyMaxLatency: this.isLive ? 5 : 0,
-                liveBufferLatencyMinRemain: this.isLive ? 2 : 0
+                liveBufferLatencyMaxLatency: this.isLive ? 15 : 0,
+                liveBufferLatencyMinRemain: this.isLive ? 8 : 0
             });
+
+            if (this.isLive) this._lastLiveEngine = 'mpegts';
 
             this.mpegtsPlayer.attachMediaElement(this.videoEl);
             this.mpegtsPlayer.load();
@@ -470,6 +492,7 @@ class VideoPlayer {
     playHLS(url) {
         this.loader.classList.remove('hidden');
         if (this.hls) { this.hls.destroy(); this.hls = null; }
+        if (this.isLive) this._lastLiveEngine = 'hls';
 
         this.hls = new Hls({
             enableWorker: true,
@@ -1141,6 +1164,37 @@ class VideoPlayer {
         try {
             window.dispatchEvent(new CustomEvent('opentv:live-status', { detail: { streamId: String(this.currentStreamId), ok: !!ok } }));
         } catch (e) {}
+    }
+
+    // === Reconexao automatica de canais ao vivo ===
+    // O proxy edge corta conexoes longas (~60s). Quando o stream morre ou congela,
+    // reconecta no mesmo engine — o buffer maior (15s) cobre o gap.
+    _onLiveEnded() {
+        if (!this.isLive || !this.currentUrl || this._inMkvFallback || this._vodMpegtsTried) return;
+        this._restartLive();
+    }
+
+    _restartLive() {
+        if (!this.isLive || !this.currentUrl) return;
+        const now = Date.now();
+        // anti-loop: se a ultima reconexao foi ha menos de 4s, nao martela
+        if (this._lastRestartAt && now - this._lastRestartAt < 4000) return;
+        this._lastRestartAt = now;
+        this._restartCount = (this._restartCount || 0) + 1;
+        if (this._restartCount > 60) { console.warn('[LIVE] Muitas reconexoes — desistindo'); return; }
+        console.log('[LIVE] Reconectando stream (' + this._restartCount + ')...');
+        this._cameFromHls = false;
+        this._liveStatusSent = false;
+        this.destroyMpegts();
+        if (this.hls) { try { this.hls.destroy(); } catch (e) {} this.hls = null; }
+        this.loader.classList.remove('hidden');
+        const engine = this._lastLiveEngine || 'mpegts';
+        const url = this.currentUrl;
+        if (engine === 'hls') {
+            this.playHLS(this.toHlsUrl(url));
+        } else {
+            this.playMpegts(url);
+        }
     }
 
     // play com fallback de autoplay: mobile bloquea play com som fora do gesto do usuario.
