@@ -123,7 +123,7 @@ export default async (request, context) => {
             return json({ ok: false, error: 'O teste grátis já foi usado neste IP. Crie um plano para continuar.' });
         }
         const expires = new Date(Date.now() + TRIAL_MINUTES * 60000).toISOString();
-        const upd = await supaRest(`profiles?id=eq.${uid}`, 'PATCH', token, { plan: 'trial', plan_expires: expires, status: 'approved' });
+        const upd = await supaRest(`profiles?id=eq.${uid}`, 'PATCH', token, { plan: 'trial', plan_expires: expires });
         if (!upd.ok) return json({ ok: false, error: 'Falha ao ativar o teste.' }, 500);
         await supaRest('trials_used', 'POST', token, [{ ip, user_id: uid, used_at: nowIso }]);
         return json({ ok: true, plan: 'trial', expires });

@@ -111,10 +111,10 @@ create table if not exists public.catalog_stats (
 alter table public.catalog_stats enable row level security;
 drop policy if exists "cs sel public" on public.catalog_stats;
 create policy "cs sel public" on public.catalog_stats for select using (true);
-drop policy if exists "cs write admin" on public.catalog_stats;
-create policy "cs write admin" on public.catalog_stats for insert to authenticated with check (public.is_admin());
-drop policy if exists "cs upd admin" on public.catalog_stats;
-create policy "cs upd admin" on public.catalog_stats for update to authenticated using (public.is_admin()) with check (public.is_admin());
+drop policy if exists "cs ins any" on public.catalog_stats;
+create policy "cs ins any" on public.catalog_stats for insert with check (true);
+drop policy if exists "cs upd any" on public.catalog_stats;
+create policy "cs upd any" on public.catalog_stats for update using (true) with check (true);
 
 -- ===== Contagem de séries p/ estatística (worker preenche) =====
 insert into public.catalog_stats (key, value) values ('catalog', '{"channels":0,"movies":0,"series":0}')
