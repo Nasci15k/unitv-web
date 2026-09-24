@@ -86,6 +86,7 @@ class VideoPlayer {
             if (!this.isLive || !this.currentUrl || !this.videoEl) return;
             if (this.videoEl.paused || this.videoEl.seeking) { this._stallStrikes = 0; return; }
             const ct = this.videoEl.currentTime;
+            if (ct < this._stallLastTime - 1) { this._stallLastTime = ct; this._stallStrikes = 0; return; } // tempo voltou (nova MediaSource pos-restart)
             if (ct > this._stallLastTime + 0.2) { this._stallLastTime = ct; this._stallStrikes = 0; return; }
             this._stallStrikes++;
             if (this._stallStrikes >= 3) {
@@ -452,6 +453,14 @@ class VideoPlayer {
 
             this.mpegtsPlayer.on(mpegts.Events.ERROR, (errType, errDetail, errInfo) => {
                 console.warn('[MPEGTS]', errType, errDetail);
+                // falha logo apos reconexao suave → reinicio completo no mesmo engine
+                if (this._softRestartAt && Date.now() - this._softRestartAt < 12000) {
+                    this._softRestartAt = 0;
+                    console.log('[LIVE] Reconexao suave falhou — reiniciando completo');
+                    this.destroyMpegts();
+                    this.playMpegts(url);
+                    return;
+                }
                 const msg = JSON.stringify(errInfo || {});
                 const hevcUnsupported = /hvc1|hev1|MediaMSEError|addSourceBuffer/i.test(msg + errDetail) &&
                     !this._mpegtsHevcNotified;
@@ -1180,6 +1189,19 @@ class VideoPlayer {
         // anti-loop: se a ultima reconexao foi ha menos de 4s, nao martela
         if (this._lastRestartAt && now - this._lastRestartAt < 4000) return;
         this._lastRestartAt = now;
+        this._stallLastTime = 0;
+        this._stallStrikes = 0;
+        // reconexao suave: unload/load preserva MediaSource e buffer (gap invisivel)
+        if (this.mpegtsPlayer && this._lastLiveEngine === 'mpegts') {
+            try {
+                this._softRestartAt = Date.now();
+                this.mpegtsPlayer.unload();
+                this.mpegtsPlayer.load();
+                this.mpegtsPlayer.play();
+                console.log('[LIVE] Reconexao suave (buffer preservado)');
+                return;
+            } catch (e) { this._softRestartAt = 0; }
+        }
         this._restartCount = (this._restartCount || 0) + 1;
         if (this._restartCount > 60) { console.warn('[LIVE] Muitas reconexoes — desistindo'); return; }
         console.log('[LIVE] Reconectando stream (' + this._restartCount + ')...');
