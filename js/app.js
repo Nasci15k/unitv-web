@@ -40,7 +40,55 @@
     function trailerUrl(title) {
         return 'https://www.youtube.com/results?search_query=' + encodeURIComponent((title || '') + ' trailer oficial');
     }
-    const OMDB_KEY = (window.OPENTV_CONFIG && window.OPENTV_CONFIG.OMDB_API_KEY) || '';
+    // ===== OMDb multi-chave: rotacao automatica + limite diario =====
+    const _omdbKeys = [];
+    try {
+        const c = window.OPENTV_CONFIG || {};
+        if (Array.isArray(c.OMDB_API_KEYS)) _omdbKeys.push(...c.OMDB_API_KEYS.filter(Boolean));
+        else if (Array.isArray(c.OMDB_API_KEY)) _omdbKeys.push(...c.OMDB_API_KEY.filter(Boolean));
+        else if (c.OMDB_API_KEY) _omdbKeys.push(c.OMDB_API_KEY);
+    } catch (e) {}
+    const OMDB_HAS = _omdbKeys.length > 0;
+
+    function _omdbUsage() {
+        const today = new Date().toISOString().slice(0, 10);
+        try {
+            let u = JSON.parse(localStorage.getItem('opentv_omdb_usage') || 'null');
+            if (!u || u.date !== today) u = { date: today, counts: {}, dead: {} };
+            return u;
+        } catch (e) { return { date: today, counts: {}, dead: {} }; }
+    }
+    function _omdbUsageSave(u) { try { localStorage.setItem('opentv_omdb_usage', JSON.stringify(u)); } catch (e) {} }
+    function _omdbPickKey() {
+        const u = _omdbUsage();
+        let best = null, bestN = Infinity;
+        _omdbKeys.forEach(k => {
+            if (u.dead[k]) return;
+            const n = u.counts[k] || 0;
+            if (n < bestN) { bestN = n; best = k; }
+        });
+        return best;
+    }
+    async function _omdbFetch(params) {
+        for (let i = 0; i < _omdbKeys.length; i++) {
+            const key = _omdbPickKey();
+            if (!key) return null;
+            const u = _omdbUsage();
+            u.counts[key] = (u.counts[key] || 0) + 1;
+            _omdbUsageSave(u);
+            try {
+                const res = await fetch('https://www.omdbapi.com/?apikey=' + key + params);
+                const j = await res.json();
+                if (j && j.Response === 'False' && /limit|quota|exceed/i.test(j.Error || '')) {
+                    const u2 = _omdbUsage(); u2.dead[key] = true; _omdbUsageSave(u2);
+                    continue;
+                }
+                return j;
+            } catch (e) { continue; }
+        }
+        return null;
+    }
+
     // Cache persistente (localStorage) — estica o limite diario do OMDb
     let _omdbPersist = {};
     try { _omdbPersist = JSON.parse(localStorage.getItem('opentv_omdb_cache') || '{}'); } catch (e) { _omdbPersist = {}; }
@@ -57,7 +105,6 @@
         }, 1200);
     }
     const omdbCache = new Map();
-    const omdbSeasonCache = new Map();
     function omdbGet(key) {
         if (omdbCache.has(key)) return omdbCache.get(key);
         if (key in _omdbPersist) { const v = _omdbPersist[key]; omdbCache.set(key, v); return v; }
@@ -69,29 +116,27 @@
         _omdbPersistSave();
     }
     async function omdbLookup(title, year, type) {
-        if (!OMDB_KEY || !title) return null;
+        if (!OMDB_HAS || !title) return null;
         const key = 't|' + title + '|' + (year || '') + '|' + (type || '');
         const cached = omdbGet(key);
         if (cached !== undefined) return cached;
         try {
-            let u = 'https://www.omdbapi.com/?apikey=' + OMDB_KEY + '&t=' + encodeURIComponent(title.replace(/\s*\(\d{4}\)\s*$/, ''));
-            if (year) u += '&y=' + year;
-            if (type) u += '&type=' + type;
-            const res = await fetch(u);
-            const j = await res.json();
+            let p = '&t=' + encodeURIComponent(title.replace(/\s*\(\d{4}\)\s*$/, ''));
+            if (year) p += '&y=' + year;
+            if (type) p += '&type=' + type;
+            const j = await _omdbFetch(p);
             const out = (j && j.Response === 'True') ? j : null;
             omdbSet(key, out);
             return out;
         } catch (e) { omdbSet(key, null); return null; }
     }
     async function omdbSeason(imdbID, season) {
-        if (!OMDB_KEY || !imdbID || !season) return null;
+        if (!OMDB_HAS || !imdbID || !season) return null;
         const key = 's|' + imdbID + '|' + season;
         const cached = omdbGet(key);
         if (cached !== undefined) return cached;
         try {
-            const res = await fetch('https://www.omdbapi.com/?apikey=' + OMDB_KEY + '&i=' + encodeURIComponent(imdbID) + '&Season=' + season);
-            const j = await res.json();
+            const j = await _omdbFetch('&i=' + encodeURIComponent(imdbID) + '&Season=' + season);
             const out = (j && j.Response === 'True' && Array.isArray(j.Episodes)) ? j : null;
             omdbSet(key, out);
             return out;
@@ -1518,7 +1563,7 @@
             });
         });
         // Notas IMDb por episódio (1 chamada por temporada, cacheada)
-        if (imdbID && OMDB_KEY) {
+        if (imdbID && OMDB_HAS) {
             const season = await omdbSeason(imdbID, seasonNum);
             if (season && season.Episodes) {
                 const cards = [...c.querySelectorAll('.episode-card')];
