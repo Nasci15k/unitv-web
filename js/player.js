@@ -84,6 +84,7 @@ class VideoPlayer {
         this._stallStrikes = 0;
         setInterval(() => {
             if (!this.isLive || !this.currentUrl || !this.videoEl) return;
+            if (this._reconnectTimer) { this._stallStrikes = 0; return; } // reconexao ja agendada — deixa o timer cuidar
             if (this.videoEl.paused || this.videoEl.seeking) { this._stallStrikes = 0; return; }
             const ct = this.videoEl.currentTime;
             if (ct < this._stallLastTime - 1) { this._stallLastTime = ct; this._stallStrikes = 0; return; } // tempo voltou (nova MediaSource pos-restart)
@@ -201,6 +202,8 @@ class VideoPlayer {
         this._liveStatusSent = false;
         this._restartCount = 0;
         this._lastLiveEngine = null;
+        this._liveBackoff = 2;
+        clearTimeout(this._reconnectTimer);
         this.resumeAt = 0;
         this._pendingResume = opts.resumeAt > 0 && !this.isLive ? opts.resumeAt : 0;
         this.titleEl.textContent = title;
@@ -434,16 +437,22 @@ class VideoPlayer {
             if (this.isLive) this._lastLiveEngine = 'mpegts';
 
             // Proxy edge corta streams longos (~60s). Quando a conexao morre (LOADING_COMPLETE),
-            // agenda a reconexao pra instantes ANTES do buffer acabar — gap invisivel pro usuario.
+            // agenda a reconexao pra ANTES do buffer acabar — com BACKOFF exponencial pra nao
+            // martelar o CDN (throttle: pulls repetidos em sequencia sao cortados ainda mais curtos).
+            this._liveConnStart = Date.now();
             this.mpegtsPlayer.on(mpegts.Events.LOADING_COMPLETE, () => {
                 if (!this.isLive || !this.currentUrl) return;
+                const dur = (Date.now() - (this._liveConnStart || Date.now())) / 1000;
+                if (dur < 15) this._liveBackoff = Math.min((this._liveBackoff || 2) * 2, 30);
+                else if (dur > 30) this._liveBackoff = 2;
                 let ahead = 0;
                 try {
                     const b = this.videoEl.buffered;
                     if (b.length) ahead = Math.max(0, b.end(b.length - 1) - this.videoEl.currentTime);
                 } catch (e) {}
-                const wait = Math.max(1500, Math.min((ahead - 2.5) * 1000, 12000));
-                console.log('[LIVE] Conexao cortada — reconexao agendada em ' + Math.round(wait / 1000) + 's (buffer: ' + ahead.toFixed(1) + 's)');
+                const minWait = (this._liveBackoff || 2) * 1000;
+                const wait = Math.max(minWait, Math.min((ahead - 2.5) * 1000, 12000));
+                console.log('[LIVE] Conexao durou ' + dur.toFixed(0) + 's (buffer: ' + ahead.toFixed(1) + 's) — reconexao em ' + Math.round(wait / 1000) + 's' + (minWait > 2000 ? ' (backoff)' : '') + ')');
                 clearTimeout(this._reconnectTimer);
                 this._reconnectTimer = setTimeout(() => this._restartLive(), wait);
             });
