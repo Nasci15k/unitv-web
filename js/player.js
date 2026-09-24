@@ -524,6 +524,13 @@ class VideoPlayer {
                             this._hlsToFallback(url);
                             return;
                         }
+                        // 404/403 no manifest: canal sem variante HLS (ou offline) — sem retry
+                        if (data.details === 'manifestLoadError' && data.response && (data.response.code === 404 || data.response.code === 403)) {
+                            console.log('[HLS] Manifest 404 — canal sem HLS, indo pro mpegts');
+                            this.hls.destroy(); this.hls = null;
+                            this._hlsToFallback(url);
+                            return;
+                        }
                         if (this.retryCount < this.maxRetries) {
                             this.retryCount++;
                             setTimeout(() => {
