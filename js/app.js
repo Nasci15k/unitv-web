@@ -115,20 +115,38 @@
         _omdbPersist[key] = val;
         _omdbPersistSave();
     }
+    function cleanOmdbTitle(name) {
+        let t = String(name || '');
+        t = t.replace(/\s*\((19|20)\d{2}\)\s*$/, '');
+        t = t.replace(/\b(4K|UHD|UHD 4K|FHD|FULLHD|HD|SD|3D|IMAX|LEG(?:ENDADO)?|DUB(?:LADO)?|DUAL?\s?[ÁA]UDIO|DUO?\s?[ÁA]UDIO|REMASTER\w*|EXTEND\w*|CINEMA|EXCLUSIVO)\b/gi, ' ');
+        t = t.replace(/\s*[-–|]\s*(4K|HD|FHD|LEG|DUB)\s*$/i, ' ');
+        t = t.replace(/\s{2,}/g, ' ').trim();
+        return t || String(name || '');
+    }
     async function omdbLookup(title, year, type) {
         if (!OMDB_HAS || !title) return null;
-        const key = 't|' + title + '|' + (year || '') + '|' + (type || '');
-        const cached = omdbGet(key);
+        const yr = (year && String(year) !== '0' && Number(year) > 1900) ? String(year) : '';
+        const base = 't|' + title + '|' + yr + '|' + (type || '');
+        const cached = omdbGet(base);
         if (cached !== undefined) return cached;
-        try {
-            let p = '&t=' + encodeURIComponent(title.replace(/\s*\(\d{4}\)\s*$/, ''));
-            if (year) p += '&y=' + year;
-            if (type) p += '&type=' + type;
-            const j = await _omdbFetch(p);
-            const out = (j && j.Response === 'True') ? j : null;
-            omdbSet(key, out);
-            return out;
-        } catch (e) { omdbSet(key, null); return null; }
+        const clean = cleanOmdbTitle(title);
+        const attempts = [];
+        if (clean !== title && yr) attempts.push({ t: clean, y: yr });
+        attempts.push({ t: clean, y: yr });
+        if (yr) attempts.push({ t: clean, y: '' });
+        if (clean !== title) attempts.push({ t: title, y: '' });
+        for (const a of attempts) {
+            if (omdbGet('t|' + a.t + '|' + a.y + '|' + (type || '')) !== undefined && a.t !== title) continue;
+            try {
+                let p = '&t=' + encodeURIComponent(a.t.replace(/\s*\(\d{4}\)\s*$/, ''));
+                if (a.y) p += '&y=' + a.y;
+                if (type) p += '&type=' + type;
+                const j = await _omdbFetch(p);
+                if (j && j.Response === 'True') { omdbSet(base, j); return j; }
+            } catch (e) {}
+        }
+        omdbSet(base, null);
+        return null;
     }
     async function omdbSeason(imdbID, season) {
         if (!OMDB_HAS || !imdbID || !season) return null;
@@ -1292,7 +1310,7 @@
         }
         const rt = rating10(item);
         const posterSrc = safeImg(img);
-        card.innerHTML = badge + qBadge + favBtn + '<img class="poster-img" src="' + posterSrc + '" loading="lazy" decoding="async" referrerpolicy="no-referrer" alt="" onerror="this.onerror=null;this.src=\'assets/images/placeholder.svg\'">' + progBar + '<div class="card-body"><div class="card-title">' + esc(title) + '</div>' + (rt || item.year ? '<div class="card-meta">' + (rt ? '<span class="rating"><i class="fas fa-star"></i> ' + rt.toFixed(1) + '</span>' : '') + (item.year ? '<span class="year">' + esc(item.year) + '</span>' : '') + '</div>' : '') + '</div>';
+        card.innerHTML = badge + qBadge + favBtn + '<img class="poster-img" src="' + posterSrc + '" loading="lazy" decoding="async" referrerpolicy="no-referrer" alt="" onerror="this.onerror=null;this.src=\'assets/images/placeholder.svg\'">' + progBar + '<div class="card-body"><div class="card-title">' + esc(title) + '</div>' + (rt || (item.year && String(item.year) !== '0') ? '<div class="card-meta">' + (rt ? '<span class="rating"><i class="fas fa-star"></i> ' + rt.toFixed(1) + '</span>' : '') + (item.year && String(item.year) !== '0' ? '<span class="year">' + esc(item.year) + '</span>' : '') + '</div>' : '') + '</div>';
         card.querySelector('.card-fav')?.addEventListener('click', (e) => {
             e.stopPropagation();
             FavoriteStore.toggle(type, id);
@@ -1386,7 +1404,7 @@
 
         let meta = '';
         if (rating) meta += '<span class="meta-badge star"><i class="fas fa-star"></i> ' + rating.toFixed(1) + (om ? ' <span class="meta-src">IMDb</span>' : '') + '</span>';
-        if (year) meta += '<span class="meta-badge"><i class="fas fa-calendar"></i> ' + esc(year) + '</span>';
+        if (year && String(year) !== '0' && String(year) !== 'N/A') meta += '<span class="meta-badge"><i class="fas fa-calendar"></i> ' + esc(year) + '</span>';
         if (duration) meta += '<span class="meta-badge"><i class="fas fa-clock"></i> ' + esc(duration) + '</span>';
         if (qBadge) meta += '<span class="meta-badge quality">' + qBadge + '</span>';
         if (genre) meta += '<span class="meta-badge"><i class="fas fa-tag"></i> ' + esc(String(genre).split(',').slice(0, 3).join(', ')) + '</span>';
@@ -1466,7 +1484,7 @@
 
         let meta = '';
         if (rating) meta += '<span class="meta-badge star"><i class="fas fa-star"></i> ' + rating.toFixed(1) + (om ? ' <span class="meta-src">IMDb</span>' : '') + '</span>';
-        if (year) meta += '<span class="meta-badge"><i class="fas fa-calendar"></i> ' + esc(String(year).substring(0, 10)) + '</span>';
+        if (year && String(year) !== '0' && String(year) !== 'N/A') meta += '<span class="meta-badge"><i class="fas fa-calendar"></i> ' + esc(String(year).substring(0, 10)) + '</span>';
         if (seasons.length) meta += '<span class="meta-badge"><i class="fas fa-layer-group"></i> ' + seasons.length + (seasons.length > 1 ? ' temporadas' : ' temporada') + '</span>';
         if (totalEps) meta += '<span class="meta-badge"><i class="fas fa-list-ol"></i> ' + totalEps + ' episódios</span>';
         if (runTime && Number(runTime) > 0) meta += '<span class="meta-badge"><i class="fas fa-clock"></i> ~' + esc(String(runTime)) + 'min/ep</span>';
