@@ -433,6 +433,21 @@ class VideoPlayer {
 
             if (this.isLive) this._lastLiveEngine = 'mpegts';
 
+            // Proxy edge corta streams longos (~60s). Quando a conexao morre (LOADING_COMPLETE),
+            // agenda a reconexao pra instantes ANTES do buffer acabar — gap invisivel pro usuario.
+            this.mpegtsPlayer.on(mpegts.Events.LOADING_COMPLETE, () => {
+                if (!this.isLive || !this.currentUrl) return;
+                let ahead = 0;
+                try {
+                    const b = this.videoEl.buffered;
+                    if (b.length) ahead = Math.max(0, b.end(b.length - 1) - this.videoEl.currentTime);
+                } catch (e) {}
+                const wait = Math.max(1500, Math.min((ahead - 2.5) * 1000, 12000));
+                console.log('[LIVE] Conexao cortada — reconexao agendada em ' + Math.round(wait / 1000) + 's (buffer: ' + ahead.toFixed(1) + 's)');
+                clearTimeout(this._reconnectTimer);
+                this._reconnectTimer = setTimeout(() => this._restartLive(), wait);
+            });
+
             this.mpegtsPlayer.attachMediaElement(this.videoEl);
             this.mpegtsPlayer.load();
             this.mpegtsPlayer.play();
@@ -453,14 +468,6 @@ class VideoPlayer {
 
             this.mpegtsPlayer.on(mpegts.Events.ERROR, (errType, errDetail, errInfo) => {
                 console.warn('[MPEGTS]', errType, errDetail);
-                // falha logo apos reconexao suave → reinicio completo no mesmo engine
-                if (this._softRestartAt && Date.now() - this._softRestartAt < 12000) {
-                    this._softRestartAt = 0;
-                    console.log('[LIVE] Reconexao suave falhou — reiniciando completo');
-                    this.destroyMpegts();
-                    this.playMpegts(url);
-                    return;
-                }
                 const msg = JSON.stringify(errInfo || {});
                 const hevcUnsupported = /hvc1|hev1|MediaMSEError|addSourceBuffer/i.test(msg + errDetail) &&
                     !this._mpegtsHevcNotified;
@@ -1191,17 +1198,7 @@ class VideoPlayer {
         this._lastRestartAt = now;
         this._stallLastTime = 0;
         this._stallStrikes = 0;
-        // reconexao suave: unload/load preserva MediaSource e buffer (gap invisivel)
-        if (this.mpegtsPlayer && this._lastLiveEngine === 'mpegts') {
-            try {
-                this._softRestartAt = Date.now();
-                this.mpegtsPlayer.unload();
-                this.mpegtsPlayer.load();
-                this.mpegtsPlayer.play();
-                console.log('[LIVE] Reconexao suave (buffer preservado)');
-                return;
-            } catch (e) { this._softRestartAt = 0; }
-        }
+        clearTimeout(this._reconnectTimer);
         this._restartCount = (this._restartCount || 0) + 1;
         if (this._restartCount > 60) { console.warn('[LIVE] Muitas reconexoes — desistindo'); return; }
         console.log('[LIVE] Reconectando stream (' + this._restartCount + ')...');
@@ -1209,7 +1206,6 @@ class VideoPlayer {
         this._liveStatusSent = false;
         this.destroyMpegts();
         if (this.hls) { try { this.hls.destroy(); } catch (e) {} this.hls = null; }
-        this.loader.classList.remove('hidden');
         const engine = this._lastLiveEngine || 'mpegts';
         const url = this.currentUrl;
         if (engine === 'hls') {
@@ -1588,6 +1584,8 @@ class VideoPlayer {
         if (this.mseFallbackTimer) { clearTimeout(this.mseFallbackTimer); this.mseFallbackTimer = null; }
         if (this._mkvMpegtsTimer) { clearTimeout(this._mkvMpegtsTimer); this._mkvMpegtsTimer = null; }
         this._inMkvFallback = false;
+        clearTimeout(this._reconnectTimer);
+        this.currentUrl = '';
         if (this.mseAbortController) { this.mseAbortController.abort(); this.mseAbortController = null; }
         this.loader.classList.add('hidden');
         this.errorBox.classList.add('hidden');
