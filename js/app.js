@@ -42,18 +42,33 @@
     }
     const OMDB_KEY = (window.OPENTV_CONFIG && window.OPENTV_CONFIG.OMDB_API_KEY) || '';
     const omdbCache = new Map();
-    async function omdbLookup(title, year) {
+    async function omdbLookup(title, year, type) {
         if (!OMDB_KEY || !title) return null;
-        const key = title + '|' + (year || '');
+        const key = title + '|' + (year || '') + '|' + (type || '');
         if (omdbCache.has(key)) return omdbCache.get(key);
         try {
-            const u = 'https://www.omdbapi.com/?apikey=' + OMDB_KEY + '&t=' + encodeURIComponent(title.replace(/\s*\(\d{4}\)\s*$/, '')) + (year ? '&y=' + year : '');
+            let u = 'https://www.omdbapi.com/?apikey=' + OMDB_KEY + '&t=' + encodeURIComponent(title.replace(/\s*\(\d{4}\)\s*$/, ''));
+            if (year) u += '&y=' + year;
+            if (type) u += '&type=' + type;
             const res = await fetch(u);
             const j = await res.json();
             const out = (j && j.Response === 'True') ? j : null;
             omdbCache.set(key, out);
             return out;
         } catch (e) { omdbCache.set(key, null); return null; }
+    }
+    const omdbSeasonCache = new Map();
+    async function omdbSeason(imdbID, season) {
+        if (!OMDB_KEY || !imdbID || !season) return null;
+        const k = imdbID + '|' + season;
+        if (omdbSeasonCache.has(k)) return omdbSeasonCache.get(k);
+        try {
+            const res = await fetch('https://www.omdbapi.com/?apikey=' + OMDB_KEY + '&i=' + encodeURIComponent(imdbID) + '&Season=' + season);
+            const j = await res.json();
+            const out = (j && j.Response === 'True' && Array.isArray(j.Episodes)) ? j : null;
+            omdbSeasonCache.set(k, out);
+            return out;
+        } catch (e) { omdbSeasonCache.set(k, null); return null; }
     }
     function qualityBadge(name) {
         const n = String(name || '').toUpperCase();
@@ -490,6 +505,16 @@
         else renderSeriesFilterPills();
     }
 
+    function renderGroupPills(el, groups, onSelect) {
+        el.innerHTML = '<button class="filter-pill active" data-cat=""><i class="fas fa-border-all"></i> Todos</button>' +
+            groups.map(g => '<button class="filter-pill" data-cat="' + [...g.catIds].join(',') + '"><i class="' + g.icon + '"></i> ' + esc(g.name) + '</button>').join('');
+        el.querySelectorAll('.filter-pill').forEach(p => p.addEventListener('click', () => {
+            el.querySelectorAll('.filter-pill').forEach(x => x.classList.remove('active'));
+            p.classList.add('active');
+            onSelect(p.dataset.cat || '');
+        }));
+    }
+
     function renderMovieFilterPills() {
         const genreEl = document.getElementById('movie-genre-pills');
         const yearEl = document.getElementById('movie-year-pills');
@@ -498,17 +523,11 @@
         const mode = state.movieFilterMode;
         genreEl.style.display = mode === 'genero' ? 'flex' : 'none';
         yearEl.style.display = mode === 'ano' ? 'flex' : 'none';
-        catEl.style.display = mode === 'todos' || mode === 'cinema' ? 'flex' : 'none';
+        catEl.style.display = (mode === 'todos' || mode === 'cinema' || mode === 'streaming') ? 'flex' : 'none';
 
         if (mode === 'genero') {
-            const genres = [...new Set(state.vodCats.map(c => c.category_name).filter(Boolean))];
-            genreEl.innerHTML = '<button class="filter-pill' + (!state.movieGenre ? ' active' : '') + '" data-genre="">Todos</button>' +
-                genres.map(g => '<button class="filter-pill' + (state.movieGenre === g ? ' active' : '') + '" data-genre="' + esc(g) + '">' + esc(g) + '</button>').join('');
-            genreEl.querySelectorAll('.filter-pill').forEach(p => p.addEventListener('click', () => {
-                state.movieGenre = p.dataset.genre || '';
-                renderMovieFilterPills();
-                renderMovies(1);
-            }));
+            const groups = buildVodGenres(state.vodCats);
+            renderGroupPills(genreEl, groups, (catId) => { state.movieGenre = ''; state.movieCat = catId; renderMovies(1); });
         }
         if (mode === 'ano') {
             const years = [...new Set(state.allMovies.map(m => String(m.year || '')).filter(y => y && y !== '0'))].sort().reverse();
@@ -520,24 +539,19 @@
                 renderMovies(1);
             }));
         }
+        if (mode === 'streaming') {
+            const groups = buildVodPlatforms(state.vodCats);
+            renderGroupPills(catEl, groups, (catId) => { state.movieCat = catId; renderMovies(1); });
+        }
         if (mode === 'todos' || mode === 'cinema') {
-            const groups = buildVodGroups(state.vodCats);
-            const sel = mode === 'cinema'
-                ? groups.filter(g => /lançamento|4k|cinema/i.test(g.name))
-                : groups;
-            catEl.innerHTML = '<button class="filter-pill active" data-cat=""><i class="fas fa-border-all"></i> Todos</button>' +
-                sel.map(g => '<button class="filter-pill" data-cat="' + [...g.catIds].join(',') + '"><i class="fas ' + g.icon + '"></i> ' + esc(g.name) + '</button>').join('');
-            catEl.querySelectorAll('.filter-pill').forEach(p => p.addEventListener('click', () => {
-                catEl.querySelectorAll('.filter-pill').forEach(x => x.classList.remove('active'));
-                p.classList.add('active');
-                state.movieCat = p.dataset.cat || '';
-                renderMovies(1);
-            }));
+            let groups = [...buildVodCollections(state.vodCats), ...buildVodPlatforms(state.vodCats), ...buildVodGenres(state.vodCats)];
+            if (mode === 'cinema') groups = groups.filter(g => /lançamento|4k|cinema|legendad/i.test(g.name));
+            renderGroupPills(catEl, groups, (catId) => { state.movieCat = catId; renderMovies(1); });
         }
     }
 
     // ===== Grupos curados de categorias (provedor manda bagunçado) =====
-    function buildGroupList(cats, defs) {
+    function buildGroupList(cats, defs, catchAllName) {
         const groups = [];
         const seen = new Set();
         const low = (n) => String(n || '').toLowerCase();
@@ -546,46 +560,83 @@
             if (ids.size) { groups.push({ name, icon, catIds: ids }); ids.forEach(i => seen.add(i)); }
         };
         defs.forEach(([name, icon, re]) => add(name, icon, re));
+        if (catchAllName) {
+            const rest = cats.filter(c => !seen.has(String(c.category_id))).map(c => String(c.category_id));
+            if (rest.length) groups.push({ name: catchAllName, icon: 'fas fa-layer-group', catIds: new Set(rest) });
+        }
         return groups;
     }
 
-    function buildVodGroups(cats) {
+    // Plataformas (filmes e séries compartilham)
+    const PLATFORM_DEFS = [
+        ['Netflix', 'fab fa-netflix', /netflix/],
+        ['Prime Video', 'fab fa-amazon', /amazon|prime video|\bprime\b/],
+        ['HBO Max', 'fas fa-circle-play', /hbo/],
+        ['Disney+', 'fas fa-wand-magic-sparkles', /disney/],
+        ['Apple TV', 'fab fa-apple', /apple/],
+        ['GloboPlay', 'fas fa-globe', /globo/],
+        ['Paramount+', 'fas fa-mountain', /paramount/],
+        ['Crunchyroll', 'fas fa-dragon', /crunchy|anime(?!s)/],
+        ['Looke', 'fas fa-clapperboard', /looke/]
+    ];
+
+    function buildVodPlatforms(cats) { return buildGroupList(cats, PLATFORM_DEFS); }
+
+    function buildVodGenres(cats) {
         return buildGroupList(cats, [
-            ['Lançamentos', 'fa-bolt', /lan[çc]amento|estreia|2025|2026|di[áa]rios/],
-            ['4K & Cinema', 'fa-gem', /4k|qualidade cinema|\b3d\b|alta qualidade|bluray|remaster/],
-            ['Religiosos', 'fa-church', /evang[ée]lic|religios|gospel|natal|jesus|bibli/],
-            ['Ação', 'fa-person-boxing', /a[çc][ãa]o|acao|action/],
-            ['Aventura', 'fa-mountain', /aventura|adventure/],
-            ['Comédia', 'fa-face-smile', /com[ée]dia|comedy/],
-            ['Crime', 'fa-user-secret', /crime|policia/],
-            ['Drama', 'fa-masks-theater', /drama/],
-            ['Terror', 'fa-ghost', /terror|horror|medo/],
-            ['Suspense', 'fa-user-ninja', /suspense|thriller/],
-            ['Romance', 'fa-heart', /romance/],
-            ['Ficção & Fantasia', 'fa-rocket', /fic[çc][ãa]o|sci.?fi|fantasia/],
-            ['Animação', 'fa-child', /anima[çc][ãa]o|desenho/],
-            ['Nacional', 'fa-flag', /nacional|brasileir/],
-            ['Documentário', 'fa-book-open', /document/]
+            ['Ação', 'fas fa-person-boxing', /a[çc][ãa]o|acao|action/],
+            ['Aventura', 'fas fa-mountain', /aventura|adventure/],
+            ['Comédia', 'fas fa-face-smile', /com[ée]dia|comedy|comedia/],
+            ['Crime', 'fas fa-user-secret', /crime|policia/],
+            ['Drama', 'fas fa-masks-theater', /drama/],
+            ['Terror', 'fas fa-ghost', /terror|horror|medo/],
+            ['Suspense', 'fas fa-user-ninja', /suspense|thriller/],
+            ['Romance', 'fas fa-heart', /romance/],
+            ['Ficção & Fantasia', 'fas fa-rocket', /fic[çc]|sci.?fi|fanta/],
+            ['Animação & Anime', 'fas fa-child', /anima[çc]|anime|desenho/],
+            ['Família', 'fas fa-people-roof', /fam[íi]lia|familia/],
+            ['Documentário', 'fas fa-book-open', /document/],
+            ['Mistério', 'fas fa-magnifying-glass', /mist[ée]rio|misterio/],
+            ['História', 'fas fa-landmark', /hist[óo]ria|historia/],
+            ['Faroeste', 'fas fa-hat-cowboy', /faroeste|western/],
+            ['Guerra', 'fas fa-jet-fighter', /guerra|war\b/],
+            ['Música & Shows', 'fas fa-music', /m[uú]sica|musica|musical|shows?|karaoke/],
+            ['Clássicos & Retrô', 'fas fa-film', /cl[áa]ssic|classic|retro|antigos/],
+            ['Nacional', 'fas fa-flag', /nacional|brasileir/],
+            ['Religiosos', 'fas fa-church', /evang[ée]lic|religios|gospel|natal|jesus|bibli|louvor/],
+            ['Coletâneas', 'fas fa-boxes-stacked', /colet[âa]nea|coletanea|mazzaropi|resident|batman|bourne|star wars|brinquedo|jornada|trapalh|rocky|007|anjos da noite/]
+        ], 'Diversos');
+    }
+
+    function buildVodCollections(cats) {
+        return buildGroupList(cats, [
+            ['Lançamentos', 'fas fa-bolt', /lan[çc]amento|lancamento|estreia|2025|2026|di[áa]rios/],
+            ['4K & Cinema', 'fas fa-gem', /4k|qualidade cinema|\b3d\b|uhd|bluray|remaster/],
+            ['Legendados', 'fas fa-closed-captioning', /legendad/]
         ]);
     }
 
-    function buildSeriesGroups(cats) {
+    function buildSeriesPlatforms(cats) { return buildGroupList(cats, PLATFORM_DEFS); }
+
+    function buildSeriesGenres(cats) {
         return buildGroupList(cats, [
-            ['Netflix', 'fab fa-netflix', /netflix/],
-            ['Prime Video', 'fab fa-amazon', /amazon|prime video/],
-            ['HBO Max', 'fas fa-circle-play', /hbo/],
-            ['Disney+', 'fas fa-wand-magic-sparkles', /disney/],
-            ['GloboPlay', 'fas fa-globe', /globo/],
-            ['Paramount+', 'fas fa-mountain', /paramount/],
-            ['Apple TV', 'fab fa-apple', /apple/],
-            ['Crunchyroll', 'fas fa-dragon', /crunchy|anime/],
-            ['Lançamentos', 'fas fa-bolt', /lan[çc]amento/],
             ['Drama', 'fas fa-masks-theater', /drama/],
-            ['Comédia', 'fas fa-face-smile', /com[ée]dia|comedy/],
-            ['Ação', 'fas fa-person-boxing', /a[çc][ãa]o|acao|action/],
+            ['Comédia', 'fas fa-face-smile', /com[ée]dia|comedy|comedia/],
+            ['Documentário', 'fas fa-book-open', /document/],
+            ['Animação & Animes', 'fas fa-child', /anima[çc]|anime/],
+            ['Reality Shows', 'fas fa-video', /reality/],
             ['Crime', 'fas fa-user-secret', /crime/],
-            ['Animação', 'fas fa-child', /anima[çc][ãa]o|desenho/]
-        ]);
+            ['Mistério', 'fas fa-magnifying-glass', /mist[ée]rio|misterio/],
+            ['Novelas & Turcas', 'fas fa-tv', /novela|turca|dorama/],
+            ['Sci-Fi & Fantasia', 'fas fa-rocket', /sci.?fi|fanta|fic[çc]/],
+            ['Ação & Aventura', 'fas fa-person-boxing', /a[çc][ãa]o|acao|action|aventura/],
+            ['Kids & Família', 'fas fa-child-reaching', /kids|fam[íi]lia|familia/],
+            ['Guerra & Política', 'fas fa-jet-fighter', /war\b|politic|guerra/],
+            ['Faroeste', 'fas fa-hat-cowboy', /faroeste|western/],
+            ['Romance', 'fas fa-heart', /romance/],
+            ['Legendadas', 'fas fa-closed-captioning', /legendad/],
+            ['Looke', 'fas fa-clapperboard', /looke/]
+        ], 'Diversos');
     }
 
     function renderSeriesFilterPills() {
@@ -596,17 +647,11 @@
         const mode = state.seriesFilterMode;
         genreEl.style.display = mode === 'genero' ? 'flex' : 'none';
         yearEl.style.display = mode === 'ano' ? 'flex' : 'none';
-        catEl.style.display = mode === 'todos' ? 'flex' : 'none';
+        catEl.style.display = (mode === 'todos' || mode === 'streaming') ? 'flex' : 'none';
 
         if (mode === 'genero') {
-            const genres = [...new Set(state.seriesCats.map(c => c.category_name).filter(Boolean))];
-            genreEl.innerHTML = '<button class="filter-pill' + (!state.seriesGenre ? ' active' : '') + '" data-genre="">Todos</button>' +
-                genres.map(g => '<button class="filter-pill' + (state.seriesGenre === g ? ' active' : '') + '" data-genre="' + esc(g) + '">' + esc(g) + '</button>').join('');
-            genreEl.querySelectorAll('.filter-pill').forEach(p => p.addEventListener('click', () => {
-                state.seriesGenre = p.dataset.genre || '';
-                renderSeriesFilterPills();
-                renderSeries(1);
-            }));
+            const groups = buildSeriesGenres(state.seriesCats);
+            renderGroupPills(genreEl, groups, (catId) => { state.seriesGenre = ''; state.seriesCat = catId; renderSeries(1); });
         }
         if (mode === 'ano') {
             const years = [...new Set(state.allSeries.map(s => String(s.year || '')).filter(y => y && y !== '0'))].sort().reverse();
@@ -618,30 +663,23 @@
                 renderSeries(1);
             }));
         }
+        if (mode === 'streaming') {
+            const groups = buildSeriesPlatforms(state.seriesCats);
+            renderGroupPills(catEl, groups, (catId) => { state.seriesCat = catId; renderSeries(1); });
+        }
         if (mode === 'todos') {
-            const groups = buildSeriesGroups(state.seriesCats);
-            catEl.innerHTML = '<button class="filter-pill active" data-cat=""><i class="fas fa-border-all"></i> Todos</button>' +
-                groups.map(g => '<button class="filter-pill" data-cat="' + [...g.catIds].join(',') + '"><i class="' + g.icon + '"></i> ' + esc(g.name) + '</button>').join('');
-            catEl.querySelectorAll('.filter-pill').forEach(p => p.addEventListener('click', () => {
-                catEl.querySelectorAll('.filter-pill').forEach(x => x.classList.remove('active'));
-                p.classList.add('active');
-                state.seriesCat = p.dataset.cat || '';
-                renderSeries(1);
-            }));
+            const groups = [...buildSeriesPlatforms(state.seriesCats), ...buildSeriesGenres(state.seriesCats)];
+            renderGroupPills(catEl, groups, (catId) => { state.seriesCat = catId; renderSeries(1); });
         }
     }
 
     function getFilteredMovies() {
         let filtered = ContentFilter.filterItems(state.allMovies, state.movieSection);
         filtered = filtered.filter(m => !ContentFilter.isAdult(m.name || ''));
-        if (state.movieFilterMode === 'genero' && state.movieGenre) {
-            const catIds = new Set(state.vodCats.filter(c => c.category_name === state.movieGenre).map(c => String(c.category_id)));
-            filtered = filtered.filter(m => catIds.has(String(m.category_id)) || (m.category_name || '').includes(state.movieGenre));
-        }
-        if (state.movieFilterMode === 'ano' && state.movieYear) {
+        if (state.movieYear) {
             filtered = filtered.filter(m => String(m.year) === state.movieYear);
         }
-        if ((state.movieFilterMode === 'todos' || state.movieFilterMode === 'cinema') && state.movieCat) {
+        if (state.movieCat) {
             const ids = new Set(String(state.movieCat).split(',').filter(Boolean));
             filtered = filtered.filter(m => ids.has(String(m.category_id)) || (m.category_ids || []).some(x => ids.has(String(x))));
         }
@@ -651,14 +689,10 @@
     function getFilteredSeries() {
         let filtered = ContentFilter.filterItems(state.allSeries, state.seriesSection);
         filtered = filtered.filter(s => !ContentFilter.isAdult(s.name || ''));
-        if (state.seriesFilterMode === 'genero' && state.seriesGenre) {
-            const catIds = new Set(state.seriesCats.filter(c => c.category_name === state.seriesGenre).map(c => String(c.category_id)));
-            filtered = filtered.filter(s => catIds.has(String(s.category_id)) || (s.category_name || '').includes(state.seriesGenre));
-        }
-        if (state.seriesFilterMode === 'ano' && state.seriesYear) {
+        if (state.seriesYear) {
             filtered = filtered.filter(s => String(s.year) === state.seriesYear);
         }
-        if (state.seriesFilterMode === 'todos' && state.seriesCat) {
+        if (state.seriesCat) {
             const ids = new Set(String(state.seriesCat).split(',').filter(Boolean));
             filtered = filtered.filter(s => ids.has(String(s.category_id)) || (s.category_ids || []).some(x => ids.has(String(x))));
         }
@@ -1335,7 +1369,9 @@
         showLoading('Carregando...');
         const sid = series.series_id || series.stream_id;
         let info = null;
-        try { info = await api.getSeriesInfo(sid); } catch (e) {}
+        const infoPromise = (async () => { try { return await api.getSeriesInfo(sid); } catch (e) { return null; } })();
+        const [om, iInfo] = await Promise.all([omdbLookup(series.name, series.year, 'series'), infoPromise]);
+        info = iInfo;
         hideLoading();
 
         const i = info?.info || series;
@@ -1346,17 +1382,18 @@
         const genre = i.genre || series.genre || series.category_name || '';
         const cast = i.cast || series.cast || '';
         const director = i.director || series.director || '';
-        const rating = rating10({ rating: i.rating || series.rating, rating_5based: i.rating_5based || series.rating_5based });
-        const year = i.releaseDate || i.release_date || i.year || series.releaseDate || series.year || '';
+        let rating = rating10({ rating: (om && om.imdbRating && om.imdbRating !== 'N/A') ? om.imdbRating : (i.rating || series.rating), rating_5based: i.rating_5based || series.rating_5based });
+        const year = i.releaseDate || i.release_date || i.year || series.releaseDate || series.year || (om && om.Year) || '';
         const runTime = i.episode_run_time || series.episode_run_time;
         const trailer = i.youtube_trailer || series.youtube_trailer;
         const episodes = info?.episodes || {};
         const seasonKeys = Object.keys(episodes).sort((a, b) => Number(a) - Number(b));
         const seasons = seasonKeys.length ? seasonKeys.map(k => ({ season_number: k })) : (info?.seasons || []);
         const totalEps = Object.values(episodes).reduce((a, arr) => a + (arr?.length || 0), 0);
+        const imdbID = (om && om.imdbID) || null;
 
         let meta = '';
-        if (rating) meta += '<span class="meta-badge star"><i class="fas fa-star"></i> ' + rating.toFixed(1) + '</span>';
+        if (rating) meta += '<span class="meta-badge star"><i class="fas fa-star"></i> ' + rating.toFixed(1) + (om ? ' <span class="meta-src">IMDb</span>' : '') + '</span>';
         if (year) meta += '<span class="meta-badge"><i class="fas fa-calendar"></i> ' + esc(String(year).substring(0, 10)) + '</span>';
         if (seasons.length) meta += '<span class="meta-badge"><i class="fas fa-layer-group"></i> ' + seasons.length + (seasons.length > 1 ? ' temporadas' : ' temporada') + '</span>';
         if (totalEps) meta += '<span class="meta-badge"><i class="fas fa-list-ol"></i> ' + totalEps + ' episódios</span>';
@@ -1388,12 +1425,12 @@
             '</div>' + seasonsHtml;
 
         if (seasons.length) {
-            renderEpisodes(sid, seasons[0].season_number, episodes);
+            renderEpisodes(sid, seasons[0].season_number, episodes, imdbID);
             document.querySelectorAll('.season-pill').forEach(pill => {
                 pill.addEventListener('click', () => {
                     document.querySelectorAll('.season-pill').forEach(p => p.classList.remove('active'));
                     pill.classList.add('active');
-                    renderEpisodes(sid, String(pill.dataset.season), episodes);
+                    renderEpisodes(sid, String(pill.dataset.season), episodes, imdbID);
                 });
             });
         }
@@ -1416,14 +1453,15 @@
         modal.classList.remove('hidden');
     }
 
-    function renderEpisodes(sid, seasonNum, allEpisodes) {
+    async function renderEpisodes(sid, seasonNum, allEpisodes, imdbID) {
         const eps = allEpisodes[seasonNum] || [];
         const c = $('episodes-grid');
         if (!eps.length) { c.innerHTML = '<div class="empty-state"><p>Nenhum episódio encontrado</p></div>'; return; }
         c.innerHTML = eps.map((ep, idx) => {
             const epNum = ep.episode_number ?? ep.episode_num ?? (idx + 1);
             const still = safeImg(ep.info?.movie_image || ep.info?.cover_big || '');
-            const dur = ep.info?.duration || '';
+            let dur = ep.info?.duration || '';
+            if (/^00:00:00$/.test(dur) || dur === '0') dur = '';
             const plot = ep.info?.plot || '';
             const epTitle = cleanEpTitle(ep.title, epNum);
             const prog = WatchStore.getProgress('series', ep.id);
@@ -1436,8 +1474,8 @@
                 '</div>' +
                 '<div class="ep-info">' +
                 '<div class="ep-name"><span class="ep-num-chip">E' + epNum + '</span> ' + esc(epTitle) + '</div>' +
-                '<div class="ep-meta">' + (dur ? '<i class="fas fa-clock"></i> ' + esc(dur) : '') + '</div>' +
-                (plot ? '<div class="ep-plot">' + esc(plot.substring(0, 180)) + (plot.length > 180 ? '…' : '') + '</div>' : '') +
+                (dur ? '<div class="ep-meta"><i class="fas fa-clock"></i> ' + esc(dur) + '</div>' : '') +
+                (plot ? '<div class="ep-plot">' + esc(plot.substring(0, 220)) + (plot.length > 220 ? '…' : '') + '</div>' : '') +
                 '</div></div>';
         }).join('');
         c.querySelectorAll('.episode-card').forEach(card => {
@@ -1452,6 +1490,29 @@
                 player.play(api.getVideoUrl('series', epId, epExt), epTitle, 'series', { streamId: epId, resumeAt });
             });
         });
+        // Notas IMDb por episódio (1 chamada por temporada, cacheada)
+        if (imdbID && OMDB_KEY) {
+            const season = await omdbSeason(imdbID, seasonNum);
+            if (season && season.Episodes) {
+                const cards = [...c.querySelectorAll('.episode-card')];
+                season.Episodes.forEach(e => {
+                    if (!e.imdbRating || e.imdbRating === 'N/A') return;
+                    const card = cards.find(cd => cd.querySelector('.ep-num-chip')?.textContent === 'E' + e.Episode);
+                    if (card) {
+                        let meta = card.querySelector('.ep-meta');
+                        if (!meta) {
+                            const info = card.querySelector('.ep-info');
+                            if (info) {
+                                meta = document.createElement('div');
+                                meta.className = 'ep-meta';
+                                info.insertBefore(meta, info.querySelector('.ep-plot'));
+                            }
+                        }
+                        if (meta) meta.insertAdjacentHTML('beforeend', '<span class="ep-imdb"><i class="fas fa-star"></i> ' + esc(String(e.imdbRating)) + ' <span class="meta-src">IMDb</span></span>');
+                    }
+                });
+            }
+        }
     }
 
     window.playItem = (type, id, title) => {
