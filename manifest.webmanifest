@@ -1,0 +1,19 @@
+{
+  "name": "OpenTv - TV, Filmes e Series",
+  "short_name": "OpenTv",
+  "description": "Canais de TV ao vivo, filmes e series num so lugar. Computador, celular e TV.",
+  "start_url": "/index.html",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0f0f11",
+  "theme_color": "#e50914",
+  "icons": [
+    { "src": "/assets/images/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/assets/images/icon-maskable.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "TV Ao Vivo", "url": "/index.html?section=live" },
+    { "name": "Filmes", "url": "/index.html?section=movies" }
+  ]
+}

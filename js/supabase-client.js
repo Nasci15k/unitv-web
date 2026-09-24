@@ -239,12 +239,19 @@
     });
   }
 
-  window.AuthStore = {
-    init: init,
-    isAuthenticated: function () { return !!user; },
-    getUser: function () { return user; },
-    getProfile: function () { return profile; },
-    isAdmin: function () { return !!(profile && profile.role === 'admin'); },
+    window.AuthStore = {
+        init: init,
+        isAuthenticated: function () { return !!user; },
+        getUser: function () { return user; },
+        getProfile: function () { return profile; },
+        isAdmin: function () { return !!(profile && profile.role === 'admin'); },
+        getAccessToken: function () {
+            if (!client) return Promise.resolve('');
+            return client.auth.getSession().then(function (res) {
+                return (res && res.data && res.data.session && res.data.session.access_token) || '';
+            }).catch(function () { return ''; });
+        },
+        getClient: function () { return client; },
     isApproved: function () {
       if (!user) return false;
       if (profile && profile.role === 'admin') return true;

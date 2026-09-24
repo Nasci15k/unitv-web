@@ -76,6 +76,8 @@ async function checkChannels() {
     let live = [];
     try { live = await api('action=get_live_streams'); } catch (e) { log('get_live_streams falhou', e.message); return; }
     if (!Array.isArray(live)) live = [];
+    let vodsTmp = [];
+    try { vodsTmp = await api('action=get_vod_streams'); } catch (e) {}
     log(`testando ${live.length} canais...`);
     const nowIso = new Date().toISOString();
     const statuses = live.map(s => ({ stream_id: String(s.stream_id), status: 'offline', checked_at: nowIso }));
@@ -91,8 +93,11 @@ async function checkChannels() {
         } catch (e) { /* offline */ }
     });
     const online = statuses.filter(s => s.status === 'online').length;
-    try { await supaUpsert('channel_status', statuses); log(`status: ${online}/${statuses.length} online — salvo (${Math.round((Date.now() - t0) / 1000)}s)`); }
-    catch (e) { log('erro ao salvar status', e.message); }
+    log(`status: ${online}/${statuses.length} online — salvo (${Math.round((Date.now() - t0) / 1000)}s)`);
+    // estatisticas do catalogo pra landing page
+    let series = [];
+    try { series = await api('action=get_series'); } catch (e) {}
+    await supaUpsert('catalog_stats', [{ key: 'catalog', value: { channels: statuses.length, movies: (vodsTmp && vodsTmp.length) || 0, series: Array.isArray(series) ? series.length : 0 }, updated_at: new Date().toISOString() }]);
 }
 
 async function enrichGenres() {

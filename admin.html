@@ -1,92 +1,319 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="supabase-url" content="https://figvurwbnocrzoupvtgs.supabase.co">
-  <meta name="supabase-anon" content="sb_publishable_MRl6mB27qtXrDMyF9obwUg_vYtSNh7f">
-  <title>Painel ADM — OpenTv</title>
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23e94560'/><text x='50' y='68' font-size='50' font-weight='bold' text-anchor='middle' fill='white' font-family='Arial'>OT</text></svg>">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-  <link rel="stylesheet" href="css/admin.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="supabase-url" content="https://figvurwbnocrzoupvtgs.supabase.co">
+    <meta name="supabase-anon" content="sb_publishable_MRl6mB27qtXrDMyF9obwUg_vYtSNh7f">
+    <title>Painel ADM — OpenTv</title>
+    <link rel="icon" type="image/svg+xml" href="/assets/images/icon.svg">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+        :root{--bg-0:#0f0f11;--bg-1:#141416;--bg-2:#1a1a1e;--bg-3:#232329;--accent:#e50914;--accent-h:#f6121d;--ok:#10b981;--err:#ef4444;--warn:#f59e0b;--t1:#fff;--t2:rgba(255,255,255,.68);--t3:rgba(255,255,255,.4);--border:rgba(255,255,255,.08);--r:10px;--font:'Inter',-apple-system,sans-serif;--tr:all .2s cubic-bezier(.4,0,.2,1)}
+        html,body{height:100%;font-family:var(--font);background:var(--bg-0);color:var(--t1)}
+        body{padding:26px clamp(14px,4vw,40px) 60px;overflow-y:auto}
+        .hidden{display:none!important}
+        ::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:99px}
+        .adm-head{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:24px;flex-wrap:wrap}
+        .adm-logo{font-size:22px;font-weight:900;letter-spacing:-.6px}
+        .adm-logo span{color:var(--accent)}
+        .adm-head-btns{display:flex;gap:9px}
+        .adm-tabs{display:flex;gap:6px;margin-bottom:24px;flex-wrap:wrap}
+        .adm-tab{padding:10px 20px;background:var(--bg-2);border:1px solid var(--border);color:var(--t2);border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;transition:var(--tr);font-family:var(--font)}
+        .adm-tab:hover{color:#fff;border-color:rgba(229,9,20,.4)}
+        .adm-tab.active{background:var(--accent);border-color:transparent;color:#fff}
+        .stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:26px}
+        .stat{background:var(--bg-2);border:1px solid var(--border);border-radius:14px;padding:18px}
+        .stat b{display:block;font-size:26px;font-weight:900;letter-spacing:-.5px}
+        .stat span{font-size:10.5px;color:var(--t3);text-transform:uppercase;letter-spacing:1px;font-weight:700}
+        .stat i{float:right;font-size:15px;color:var(--accent);opacity:.75}
+        .card{background:var(--bg-2);border:1px solid var(--border);border-radius:16px;padding:20px;margin-bottom:18px;overflow-x:auto}
+        .card h3{font-size:14px;font-weight:800;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+        .card h3 i{color:var(--accent);font-size:12px}
+        table{width:100%;border-collapse:collapse;font-size:12.5px;min-width:720px}
+        th{text-align:left;color:var(--t3);font-size:10px;text-transform:uppercase;letter-spacing:1px;padding:8px 10px;border-bottom:1px solid var(--border);font-weight:800}
+        td{padding:10px;border-bottom:1px solid rgba(255,255,255,.04);color:var(--t2);vertical-align:middle}
+        tr:hover td{background:rgba(255,255,255,.02)}
+        .pill{display:inline-block;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:800;letter-spacing:.4px}
+        .pill.ok{background:rgba(16,185,129,.14);color:#34d399}
+        .pill.pend{background:rgba(245,158,11,.14);color:#fbbf24}
+        .pill.rej{background:rgba(239,68,68,.14);color:#f87171}
+        .pill.plan{background:rgba(229,9,20,.14);color:#ff8f98}
+        .pill.none{background:rgba(255,255,255,.06);color:var(--t3)}
+        .btn{padding:7px 13px;border:none;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;transition:var(--tr);font-family:var(--font);margin:2px}
+        .btn-ok{background:var(--ok);color:#04210f}
+        .btn-rej{background:var(--err);color:#fff}
+        .btn-neu{background:var(--bg-3);color:var(--t2);border:1px solid var(--border)}
+        .btn-neu:hover{color:#fff;border-color:rgba(229,9,20,.4)}
+        .btn-accent{background:var(--accent);color:#fff}
+        select,input[type=text],input[type=datetime-local],textarea{background:var(--bg-3);border:1px solid var(--border);border-radius:8px;color:var(--t1);font-family:var(--font);padding:9px 12px;font-size:12.5px;outline:none}
+        select:focus,input:focus,textarea:focus{border-color:var(--accent)}
+        .field{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+        .field label{font-size:10.5px;text-transform:uppercase;letter-spacing:1px;color:var(--t3);font-weight:800}
+        .notif-list{display:grid;gap:9px}
+        .notif-item{background:var(--bg-3);border:1px solid var(--border);border-radius:10px;padding:13px 15px;display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap}
+        .toast{position:fixed;bottom:22px;right:22px;padding:14px 22px;border-radius:12px;background:rgba(20,20,35,.96);border:1px solid var(--border);color:#fff;font-size:13.5px;z-index:5000;backdrop-filter:blur(12px);display:flex;gap:10px;align-items:center;transform:translateY(90px);opacity:0;transition:all .3s}
+        .toast.show{transform:translateY(0);opacity:1}
+        .empty{color:var(--t3);text-align:center;padding:26px;font-size:13px}
+        .mono{font-family:monospace;font-size:11px;color:var(--t3)}
+        .gate{position:fixed;inset:0;background:var(--bg-0);display:flex;align-items:center;justify-content:center;z-index:9999;text-align:center;padding:20px}
+        .two-col{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px}
+    </style>
 </head>
 <body>
-  <div class="layout">
-    <aside class="side">
-      <div class="brand">Open<span>Tv</span> <em>ADM</em></div>
-      <nav>
-        <button class="nav-a active" data-view="painel"><i class="fas fa-chart-line"></i> Painel</button>
-        <button class="nav-a" data-view="users"><i class="fas fa-users"></i> Usuários</button>
-        <button class="nav-a" data-view="settings"><i class="fas fa-sliders-h"></i> Configurações</button>
-        <button class="nav-a" data-view="content"><i class="fas fa-photo-video"></i> Conteúdo</button>
-        <a class="nav-a" href="index.html"><i class="fas fa-play"></i> Player</a>
-        <button class="nav-a danger" id="btn-adm-logout"><i class="fas fa-sign-out-alt"></i> Sair</button>
-      </nav>
-    </aside>
-    <main class="main">
-      <header class="top">
-        <h1 id="view-title">Painel</h1>
-        <div class="who" id="who">…</div>
-      </header>
-      <section id="view-painel" class="view">
-        <div class="kpis">
-          <div class="kpi"><div class="k" id="kpi-users">—</div><div class="l">Usuários</div></div>
-          <div class="kpi"><div class="k" id="kpi-admins">—</div><div class="l">Admins</div></div>
-          <div class="kpi"><div class="k" id="kpi-pending">—</div><div class="l">Pendentes</div></div>
-          <div class="kpi"><div class="k" id="kpi-approved">—</div><div class="l">Aprovados</div></div>
+    <div id="gate" class="gate"><div>
+        <div class="adm-logo">Open<span>Tv</span> — Painel</div>
+        <p style="color:var(--t3);font-size:13px;margin:10px 0 18px">Verificando acesso de administrador…</p>
+        <a href="login.html?next=admin.html" style="color:var(--accent);font-size:13px">Entrar</a>
+    </div></div>
+
+    <div id="adm" class="hidden">
+        <div class="adm-head">
+            <div class="adm-logo">Open<span>Tv</span> <span style="font-size:12px;color:var(--t3);font-weight:600">— Painel Administrativo</span></div>
+            <div class="adm-head-btns">
+                <button class="btn btn-neu" onclick="location.href='index.html'"><i class="fas fa-play"></i> Player</button>
+                <button class="btn btn-rej" id="btn-adm-logout"><i class="fas fa-sign-out-alt"></i> Sair</button>
+            </div>
         </div>
-        <div class="card">
-          <h2>Acesso rápido</h2>
-          <p class="hint">Novos cadastros ficam <strong>pendentes</strong>. Aprove em Usuários.</p>
-          <p class="hint">Admin via SQL (se precisar):</p>
-          <pre>update public.profiles set role='admin', status='approved' where email='SEU_EMAIL';</pre>
+
+        <div class="adm-tabs">
+            <button class="adm-tab active" data-tab="users"><i class="fas fa-users"></i> Usuários</button>
+            <button class="adm-tab" data-tab="notifs"><i class="fas fa-bullhorn"></i> Notificações</button>
+            <button class="adm-tab" data-tab="logs"><i class="fas fa-list"></i> Logs de Acesso</button>
+            <button class="adm-tab" data-tab="stats"><i class="fas fa-chart-simple"></i> Estatísticas</button>
         </div>
-      </section>
-      <section id="view-users" class="view hidden">
-        <div class="card">
-          <div class="row"><h2>Usuários</h2><button id="btn-reload-users" class="btn">Atualizar</button></div>
-          <div id="users-msg" class="msg hidden"></div>
-          <div class="filters-row">
-            <button class="btn sm filter-users active" data-filter="all">Todos</button>
-            <button class="btn sm filter-users" data-filter="pending">Pendentes</button>
-            <button class="btn sm filter-users" data-filter="approved">Aprovados</button>
-            <button class="btn sm filter-users" data-filter="rejected">Recusados</button>
-          </div>
-          <table class="tbl">
-            <thead><tr><th>E-mail</th><th>Nome</th><th>Papel</th><th>Status</th><th>Criado</th><th>Ações</th></tr></thead>
-            <tbody id="users-body"><tr><td colspan="6">Carregando…</td></tr></tbody>
-          </table>
+
+        <div id="tab-users" class="tab-panel">
+            <div class="stats-row" id="users-stats"></div>
+            <div class="card">
+                <h3><i class="fas fa-users"></i> Usuários <input type="text" id="user-search" placeholder="Buscar e-mail…" style="float:right;width:220px"></h3>
+                <table><thead><tr><th>Usuário</th><th>Status</th><th>Plano</th><th>Expira</th><th>Último IP</th><th>Criado</th><th>Ações</th></tr></thead>
+                <tbody id="users-tbody"></tbody></table>
+            </div>
         </div>
-      </section>
-      <section id="view-settings" class="view hidden">
-        <div class="card">
-          <h2>Configurações do site</h2>
-          <label>Nome do site<input id="set-site" type="text" value="OpenTv"></label>
-          <label>Idioma padrão
-            <select id="set-lang"><option value="pt">Português</option><option value="en">English</option><option value="es">Español</option></select>
-          </label>
-          <label>Tamanho de legenda
-            <select id="set-sub-size"><option value="0.8">Pequena</option><option value="1">Média</option><option value="1.4">Grande</option></select>
-          </label>
-          <button id="btn-save-site" class="btn primary">Salvar</button>
-          <div id="settings-msg" class="msg hidden"></div>
+
+        <div id="tab-notifs" class="tab-panel hidden">
+            <div class="two-col">
+                <div class="card">
+                    <h3><i class="fas fa-plus"></i> Emitir notificação pop-up</h3>
+                    <div class="field"><label>Título</label><input type="text" id="nt-title" placeholder="Ex: Novo canal adicionado!" maxlength="80"></div>
+                    <div class="field"><label>Mensagem</label><textarea id="nt-body" rows="4" placeholder="Ex: Adicionamos 12 novos canais de esportes…" style="resize:vertical"></textarea></div>
+                    <div class="field"><label>Tipo</label>
+                        <select id="nt-type"><option value="info">Informação</option><option value="success">Boa notícia</option><option value="warning">Aviso importante</option></select>
+                    </div>
+                    <div class="field"><label>Mostrar por</label>
+                        <select id="nt-duration"><option value="60">1 hora</option><option value="360">6 horas</option><option value="1440" selected>1 dia</option><option value="10080">7 dias</option></select>
+                    </div>
+                    <button class="btn btn-accent" id="btn-send-notif" style="padding:11px 26px;font-size:12.5px"><i class="fas fa-paper-plane"></i> Enviar pra todos os usuários</button>
+                </div>
+                <div class="card">
+                    <h3><i class="fas fa-bullhorn"></i> Notificações ativas</h3>
+                    <div class="notif-list" id="notif-list"></div>
+                </div>
+            </div>
         </div>
-      </section>
-      <section id="view-content" class="view hidden">
-        <div class="card">
-          <h2>Conteúdo</h2>
-          <p class="hint">Catálogo Xtream (telefunplay) — contagem local do player:</p>
-          <ul>
-            <li>TV ao vivo, Filmes e Séries carregam em <a href="index.html">index.html</a></li>
-            <li>Filtros, favoritos, parental e EPG no app principal</li>
-          </ul>
-          <p class="hint">Edge function <code>xtream</code> opcional esconde credenciais no deploy.</p>
+
+        <div id="tab-logs" class="tab-panel hidden">
+            <div class="card">
+                <h3><i class="fas fa-list"></i> Últimos 200 acessos</h3>
+                <table><thead><tr><th>Quando</th><th>Usuário</th><th>IP</th><th>Dispositivo</th><th>Navegador</th></tr></thead>
+                <tbody id="logs-tbody"></tbody></table>
+            </div>
         </div>
-      </section>
-    </main>
-  </div>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="js/supabase-client.js"></script>
-  <script src="js/admin.js"></script>
+
+        <div id="tab-stats" class="tab-panel hidden">
+            <div class="stats-row" id="adm-stats"></div>
+            <div class="card">
+                <h3><i class="fas fa-credit-card"></i> Pagamentos</h3>
+                <table><thead><tr><th>Quando</th><th>Usuário</th><th>Plano</th><th>Valor</th><th>Status</th></tr></thead>
+                <tbody id="pay-tbody"></tbody></table>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/supabase-client.js"></script>
+    <script src="js/config.js"></script>
+    <script>
+        (function () {
+            const $ = (id) => document.getElementById(id);
+            let client = null;
+
+            function toast(msg, err) {
+                let t = $('toast');
+                if (!t) { t = document.createElement('div'); t.className = 'toast'; document.body.appendChild(t); }
+                t.innerHTML = '<i class="fas ' + (err ? 'fa-exclamation-circle' : 'fa-check-circle') + '" style="color:' + (err ? '#ef4444' : '#10b981') + '"></i> ' + msg;
+                t.classList.add('show');
+                setTimeout(() => t.classList.remove('show'), 3600);
+            }
+
+            const fmtDate = (iso) => iso ? new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
+            const timeLeft = (iso) => {
+                if (!iso) return '—';
+                const ms = Date.parse(iso) - Date.now();
+                if (ms <= 0) return 'expirado';
+                const m = Math.floor(ms / 60000), h = Math.floor(m / 60), d = Math.floor(h / 24);
+                return d > 0 ? d + 'd ' + (h % 24) + 'h' : (h > 0 ? h + 'h ' + (m % 60) + 'min' : m + 'min');
+            };
+
+            // ===== TABS =====
+            document.querySelectorAll('.adm-tab').forEach(t => t.addEventListener('click', () => {
+                document.querySelectorAll('.adm-tab').forEach(x => x.classList.remove('active'));
+                t.classList.add('active');
+                document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
+                $('tab-' + t.dataset.tab).classList.remove('hidden');
+                if (t.dataset.tab === 'logs') loadLogs();
+                if (t.dataset.tab === 'stats') loadStats();
+            }));
+
+            // ===== USUÁRIOS =====
+            const PLANS = (window.OPENTV_CONFIG && OPENTV_CONFIG.PLANS) || {};
+            async function loadUsers() {
+                const [{ data: users, error }, { data: sess }] = await Promise.all([
+                    client.from('profiles').select('id,email,full_name,role,status,plan,plan_expires,created_at').order('created_at', { ascending: false }).limit(300),
+                    client.from('active_sessions').select('user_id,ip,device,last_seen')
+                ]);
+                if (error) { toast('Erro ao carregar usuários: ' + error.message, true); return; }
+                const sessMap = {};
+                (sess || []).forEach(s => sessMap[s.user_id] = s);
+                const q = ($('user-search').value || '').toLowerCase();
+                const list = (users || []).filter(u => !q || String(u.email || '').toLowerCase().includes(q));
+
+                const pend = list.filter(u => u.status === 'pending').length;
+                const actives = Object.values(sessMap).filter(s => Date.now() - Date.parse(s.last_seen) < 10 * 60000).length;
+                const trials = list.filter(u => u.plan === 'trial').length;
+                $('users-stats').innerHTML =
+                    stat(list.length, 'Usuários', 'fa-users') + stat(pend, 'Pendentes', 'fa-hourglass-half') +
+                    stat(actives, 'Online agora', 'fa-signal') + stat(trials, 'Em trial', 'fa-bolt');
+
+                $('users-tbody').innerHTML = list.map(u => {
+                    const s = sessMap[u.id];
+                    const stPill = u.role === 'admin' ? '<span class="pill plan">ADMIN</span>' :
+                        u.status === 'approved' ? '<span class="pill ok">APROVADO</span>' :
+                        u.status === 'pending' ? '<span class="pill pend">PENDENTE</span>' : '<span class="pill rej">RECUSADO</span>';
+                    const planPill = u.role === 'admin' ? '<span class="pill plan">∞</span>' :
+                        u.plan && u.plan !== 'none' ? '<span class="pill plan">' + u.plan.toUpperCase() + '</span>' : '<span class="pill none">nenhum</span>';
+                    const exp = u.role === 'admin' ? '∞' : (u.plan_expires ? timeLeft(u.plan_expires) : '—');
+                    return '<tr><td><b>' + esc(u.email || '') + '</b><br><span class="mono">' + esc(u.full_name || '') + '</span></td>' +
+                        '<td>' + stPill + '</td><td>' + planPill + '</td><td>' + exp + '</td>' +
+                        '<td class="mono">' + (s ? esc(s.ip || '') : '—') + (s && s.device ? '<br><span class="mono">' + s.device + '</span>' : '') + '</td>' +
+                        '<td class="mono">' + fmtDate(u.created_at) + '</td>' +
+                        '<td>' + userActions(u) + '</td></tr>';
+                }).join('') || '<tr><td colspan="7" class="empty">Nenhum usuário</td></tr>';
+
+                $('users-tbody').querySelectorAll('button[data-act]').forEach(b => b.addEventListener('click', () => userAction(b.dataset)));
+            }
+
+            function userActions(u) {
+                let h = '';
+                if (u.status !== 'approved') h += '<button class="btn btn-ok" data-act="approve" data-id="' + u.id + '" data-email="' + esc(u.email || '') + '"><i class="fas fa-check"></i> Aprovar</button>';
+                if (u.status !== 'rejected') h += '<button class="btn btn-rej" data-act="reject" data-id="' + u.id + '" data-email="' + esc(u.email || '') + '"><i class="fas fa-xmark"></i></button>';
+                if (u.role !== 'admin') h += userPlanSel(u);
+                return h;
+            }
+
+            function userPlanSel(u) {
+                const opts = ['none', 'trial', 'daily', 'weekly', 'monthly'].map(p => '<option value="' + p + '"' + (u.plan === p ? ' selected' : '') + '>' + p + '</option>').join('');
+                return '<select data-act="setplan" data-id="' + u.id + '" style="padding:5px 7px;font-size:11px;margin:2px">' + opts + '</select>' +
+                    '<button class="btn btn-accent" data-act="applyplan" data-id="' + u.id + '">OK</button>';
+            }
+
+            async function userAction(d) {
+                const id = d.id;
+                try {
+                    if (d.act === 'approve' || d.act === 'reject') {
+                        const status = d.act === 'approve' ? 'approved' : 'rejected';
+                        await client.from('profiles').update({ status }).eq('id', id);
+                        toast((d.act === 'approve' ? 'Aprovado: ' : 'Recusado: ') + d.email);
+                    }
+                    if (d.act === 'applyplan') {
+                        const sel = document.querySelector('select[data-id="' + id + '"]');
+                        const plan = sel ? sel.value : 'none';
+                        let expires = null;
+                        const mins = { trial: 15, daily: 1440, weekly: 10080, monthly: 43200 };
+                        if (mins[plan]) expires = new Date(Date.now() + mins[plan] * 60000).toISOString();
+                        await client.from('profiles').update({ plan, plan_expires: expires, ...(plan !== 'none' ? { status: 'approved' } : {}) }).eq('id', id);
+                        toast('Plano definido: ' + plan + (expires ? ' (até ' + fmtDate(expires) + ')' : ''));
+                    }
+                    loadUsers();
+                } catch (e) { toast('Erro: ' + e.message, true); }
+            }
+
+            $('user-search').addEventListener('input', () => loadUsers());
+
+            // ===== NOTIFICAÇÕES =====
+            async function loadNotifs() {
+                const { data } = await client.from('notifications').select('id,title,body,type,active,created_at,show_until').order('created_at', { ascending: false }).limit(30);
+                $('notif-list').innerHTML = (data || []).map(n =>
+                    '<div class="notif-item"><div><b>' + esc(n.title) + '</b><br><span style="font-size:12px;color:var(--t3)">' + esc(String(n.body).substring(0, 90)) + '</span></div>' +
+                    '<div style="text-align:right"><span class="pill ' + (n.active ? 'ok' : 'none') + '">' + (n.active ? 'ATIVA' : 'OFF') + '</span><br>' +
+                    '<button class="btn btn-neu" data-nid="' + n.id + '" data-nact="' + (n.active ? 'off' : 'on') + '" style="margin-top:6px">' + (n.active ? 'Desativar' : 'Reativar') + '</button></div></div>'
+                ).join('') || '<div class="empty">Nenhuma notificação ainda</div>';
+                $('notif-list').querySelectorAll('button[data-nid]').forEach(b => b.addEventListener('click', async () => {
+                    await client.from('notifications').update({ active: b.dataset.nact === 'on' }).eq('id', b.dataset.nid);
+                    loadNotifs();
+                }));
+            }
+
+            $('btn-send-notif').addEventListener('click', async () => {
+                const title = $('nt-title').value.trim(), body = $('nt-body').value.trim();
+                if (!title || !body) { toast('Preencha título e mensagem', true); return; }
+                const mins = parseInt($('nt-duration').value, 10);
+                const show_until = new Date(Date.now() + mins * 60000).toISOString();
+                const { error } = await client.from('notifications').insert({ title, body, type: $('nt-type').value, show_until, active: true });
+                if (error) { toast('Erro: ' + error.message, true); return; }
+                $('nt-title').value = ''; $('nt-body').value = '';
+                toast('Notificação enviada! Usuários verão em até 1 minuto.');
+                loadNotifs();
+            });
+
+            // ===== LOGS =====
+            async function loadLogs() {
+                const { data } = await client.from('access_logs').select('created_at,email,ip,device,user_agent').order('created_at', { ascending: false }).limit(200);
+                $('logs-tbody').innerHTML = (data || []).map(l =>
+                    '<tr><td class="mono">' + fmtDate(l.created_at) + '</td><td>' + esc(l.email || '—') + '</td><td class="mono">' + esc(l.ip || '') + '</td>' +
+                    '<td><span class="pill none">' + esc(l.device || '—') + '</span></td><td class="mono">' + esc(String(l.user_agent || '').substring(0, 60)) + '</td></tr>'
+                ).join('') || '<tr><td colspan="5" class="empty">Sem logs</td></tr>';
+            }
+
+            // ===== STATS =====
+            function stat(v, label, icon) { return '<div class="stat"><i class="fas ' + icon + '"></i><b>' + v + '</b><span>' + label + '</span></div>'; }
+            async function loadStats() {
+                const [{ count: users }, { count: trials }, { data: pay }] = await Promise.all([
+                    client.from('profiles').select('id', { count: 'exact', head: true }),
+                    client.from('trials_used').select('ip', { count: 'exact', head: true }),
+                    client.from('payments').select('email,plan,amount,status,created_at').order('created_at', { ascending: false }).limit(50)
+                ]);
+                const paid = (pay || []).filter(p => p.status === 'paid').reduce((a, p) => a + Number(p.amount || 0), 0);
+                $('adm-stats').innerHTML = stat(users, 'Usuários', 'fa-users') + stat(trials, 'Trials usados', 'fa-bolt') + stat('R$ ' + paid.toFixed(2), 'Receita', 'fa-money-bill-wave');
+                $('pay-tbody').innerHTML = (pay || []).map(p =>
+                    '<tr><td class="mono">' + fmtDate(p.created_at) + '</td><td>' + esc(p.email || '') + '</td><td>' + esc(p.plan) + '</td><td>R$ ' + Number(p.amount || 0).toFixed(2) + '</td>' +
+                    '<td><span class="pill ' + (p.status === 'paid' ? 'ok' : 'pend') + '">' + p.status.toUpperCase() + '</span></td></tr>'
+                ).join('') || '<tr><td colspan="5" class="empty">Nenhum pagamento ainda (gateway chega em breve)</td></tr>';
+            }
+
+            function esc(s) { return String(s || '').replace(/&/g, String.fromCharCode(38) + 'amp;').replace(/</g, String.fromCharCode(38) + 'lt;').replace(/>/g, String.fromCharCode(38) + 'gt;'); }
+
+            // ===== BOOT =====
+            (async () => {
+                await AuthStore.init();
+                if (!AuthStore.isAuthenticated()) { location.href = 'login.html?next=admin.html'; return; }
+                client = AuthStore.getClient();
+                // espera o perfil carregar
+                let tries = 0;
+                while (!AuthStore.getProfile() && tries++ < 20) await new Promise(r => setTimeout(r, 200));
+                if (!AuthStore.isAdmin()) {
+                    $('gate').innerHTML = '<div><div class="adm-logo">Open<span>Tv</span></div><p style="color:#f87171;font-size:14px;margin:12px 0">Acesso restrito a administradores.</p><a href="index.html" style="color:var(--t2);font-size:13px">← Voltar ao player</a></div>';
+                    return;
+                }
+                $('gate').classList.add('hidden');
+                $('adm').classList.remove('hidden');
+                loadUsers();
+                loadNotifs();
+                $('btn-adm-logout').addEventListener('click', async () => { await AuthStore.signOut(); location.href = 'login.html'; });
+            })();
+        })();
+    </script>
 </body>
 </html>

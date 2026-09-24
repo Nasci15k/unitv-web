@@ -447,6 +447,9 @@
                 showLoading('Carregando conteudo...');
                 await loadAllData();
                 showToast('Bem-vindo ao OpenTv!', 'success');
+                applyConsoleGuard();
+                startNotificationPolling();
+                startInstallPrompt();
             } else {
                 showToast('Falha na autenticacao', 'error');
                 entered = false;
@@ -504,8 +507,151 @@
             showGate('Conta aguardando aprovação do administrador.', true, '<i class="fas fa-hourglass-half"></i> Ver status');
             return;
         }
+        // ===== REGISTRO DE SESSÃO (segurança: 1 conta/IP, 1 IP/conta, plano) =====
+        const secDenied = await registerSecureSession();
+        if (secDenied) return;
         await enterApp();
     }
+
+    // ===== SEGURANÇA: sessão, plano, expiração =====
+    window.PlanStore = { plan: 'none', expires: null, role: 'user' };
+    async function registerSecureSession() {
+        try {
+            const token = await AuthStore.getAccessToken();
+            if (!token) return false;
+            const res = await fetch('/session-register', { method: 'POST', headers: { Authorization: 'Bearer ' + token } });
+            const j = await res.json();
+            if (!j.ok) {
+                showToast(j.error || 'Acesso bloqueado.', 'error');
+                await AuthStore.signOut();
+                showGate(j.error || 'Acesso bloqueado.', true, '<i class="fas fa-sign-in-alt"></i> Entrar');
+                return true;
+            }
+            window.PlanStore = { plan: j.plan, expires: j.expires, role: j.role };
+            // plano expirado → tela de planos
+            if (j.expired) { location.href = 'planos.html'; return true; }
+            // sem plano nenhum → ativar trial ou assinar
+            if (j.role !== 'admin' && j.plan === 'none') { location.href = 'planos.html'; return true; }
+            startExpiryChip();
+            startSessionHeartbeat(token);
+            return false;
+        } catch (e) { return false; } // falha de rede: nao bloqueia (RLS ainda protege)
+    }
+
+    function startSessionHeartbeat(token) {
+        setInterval(() => {
+            if (!AuthStore.isAuthenticated()) return;
+            AuthStore.getAccessToken().then(tk => {
+                if (tk) fetch('/session-heartbeat', { method: 'POST', headers: { Authorization: 'Bearer ' + tk } }).catch(() => {});
+            });
+        }, 4 * 60 * 1000);
+    }
+
+    function startExpiryChip() {
+        const chip = document.createElement('div');
+        chip.id = 'plan-chip';
+        chip.className = 'plan-chip';
+        document.querySelector('.top-bar-right')?.prepend(chip);
+        const update = () => {
+            const ps = window.PlanStore;
+            if (ps.role === 'admin') { chip.innerHTML = '<i class="fas fa-infinity"></i> Admin'; chip.classList.add('admin'); return; }
+            if (!ps.expires) { chip.innerHTML = ''; return; }
+            const ms = Date.parse(ps.expires) - Date.now();
+            if (ms <= 0) { location.href = 'planos.html'; return; }
+            const m = Math.floor(ms / 60000);
+            const h = Math.floor(m / 60), d = Math.floor(h / 24);
+            const txt = ps.plan === 'trial'
+                ? (m < 60 ? m + 'min' : h + 'h ' + (m % 60) + 'min')
+                : (d > 0 ? d + 'd ' + (h % 24) + 'h' : h + 'h ' + (m % 60) + 'min');
+            const urgent = ms < 30 * 60000;
+            chip.innerHTML = (ps.plan === 'trial' ? '<i class="fas fa-bolt"></i> Teste ' : '<i class="fas fa-clock"></i> ') + txt;
+            chip.classList.toggle('urgent', urgent);
+        };
+        update();
+        setInterval(update, 30000);
+    }
+
+    // ===== NOTIFICAÇÕES POP-UP DO ADMIN =====
+    function startNotificationPolling() {
+        const check = async () => {
+            try {
+                const client = AuthStore.getClient && AuthStore.getClient();
+                if (!client || !AuthStore.isAuthenticated()) return;
+                const { data, error } = await client.from('notifications').select('id,title,body,type,created_at').gt('show_until', new Date().toISOString()).limit(5);
+                if (error || !data || !data.length) return;
+                const readIds = JSON.parse(localStorage.getItem('opentv_notif_read') || '[]');
+                const unread = data.filter(n => !readIds.includes(n.id));
+                if (!unread.length) return;
+                const n = unread[0];
+                readIds.push(n.id);
+                localStorage.setItem('opentv_notif_read', JSON.stringify(readIds.slice(-50)));
+                showNotificationPopup(n);
+            } catch (e) {}
+        };
+        check();
+        setInterval(check, 60000);
+    }
+
+    function showNotificationPopup(n) {
+        let ov = document.getElementById('notif-popup');
+        if (ov) ov.remove();
+        ov = document.createElement('div');
+        ov.id = 'notif-popup';
+        ov.className = 'modal-overlay';
+        ov.innerHTML = '<div class="modal-box" style="max-width:420px;padding:30px;text-align:center">' +
+            '<div style="width:58px;height:58px;margin:0 auto 16px;border-radius:50%;background:rgba(229,9,20,.12);border:1px solid rgba(229,9,20,.3);display:flex;align-items:center;justify-content:center">' +
+            '<i class="fas ' + (n.type === 'success' ? 'fa-check' : n.type === 'warning' ? 'fa-triangle-exclamation' : 'fa-bullhorn') + '" style="font-size:24px;color:var(--accent)"></i></div>' +
+            '<div style="font-size:18px;font-weight:800;margin-bottom:8px">' + esc(n.title) + '</div>' +
+            '<div style="font-size:13.5px;color:var(--text-2);line-height:1.6;margin-bottom:22px">' + esc(n.body) + '</div>' +
+            '<button class="btn-watch primary" style="width:100%;justify-content:center" id="btn-notif-ok">Entendi</button></div>';
+        document.body.appendChild(ov);
+        ov.querySelector('#btn-notif-ok').addEventListener('click', () => ov.remove());
+        ov.addEventListener('click', (e) => { if (e.target === ov) ov.remove(); });
+    }
+
+    // ===== CONSOLE PROTEGIDO (não-admin) =====
+    function applyConsoleGuard() {
+        if (AuthStore.isAdmin()) return;
+        try {
+            const noop = () => {};
+            console.log = noop; console.info = noop; console.debug = noop; console.warn = noop;
+            console.clear();
+            window.addEventListener('contextmenu', (e) => e.preventDefault(), true);
+            window.addEventListener('keydown', (e) => {
+                const k = e.key.toUpperCase();
+                if (k === 'F12' || (e.ctrlKey && e.shiftKey && ['I', 'J', 'C'].includes(k)) || (e.ctrlKey && k === 'U')) {
+                    e.preventDefault(); e.stopPropagation();
+                }
+            }, true);
+        } catch (e) {}
+    }
+
+    // ===== POPUP: instalar app (Android/TV) =====
+    let deferredInstall = null;
+    function startInstallPrompt() {
+        if (AuthStore.isAdmin()) return;
+        if (!/Mobi|Android|TV|SmartTV/i.test(navigator.userAgent)) return;
+        if (localStorage.getItem('opentv_install_dismiss') === '1') return;
+        window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredInstall = e; });
+        setTimeout(() => {
+            const ov = document.createElement('div');
+            ov.className = 'modal-overlay';
+            const apk = (window.OPENTV_CONFIG && OPENTV_CONFIG.APK_URL) || '';
+            ov.innerHTML = '<div class="modal-box" style="max-width:400px;padding:28px;text-align:center">' +
+                '<i class="fab fa-android" style="font-size:40px;color:var(--accent);margin-bottom:14px"></i>' +
+                '<div style="font-size:18px;font-weight:800;margin-bottom:8px">Instalar o app OpenTv</div>' +
+                '<div style="font-size:13px;color:var(--text-2);line-height:1.6;margin-bottom:20px">Instale no seu aparelho e assista como num app de verdade — tela cheia, ícone na home, mais rápido.</div>' +
+                (deferredInstall ? '<button class="btn-watch primary" style="width:100%;justify-content:center;margin-bottom:10px" id="btn-install-pwa"><i class="fas fa-download"></i> Instalar app</button>' : '') +
+                (apk ? '<a class="btn-watch secondary" style="width:100%;justify-content:center;margin-bottom:10px" href="' + apk + '" id="btn-install-apk"><i class="fas fa-file-arrow-down"></i> Baixar APK</a>' : '') +
+                '<button class="btn-trial" id="btn-install-later" style="width:100%;margin-top:0">Continuar pelo navegador</button></div>';
+            document.body.appendChild(ov);
+            const close = () => { ov.remove(); localStorage.setItem('opentv_install_dismiss', '1'); };
+            ov.querySelector('#btn-install-later')?.addEventListener('click', close);
+            ov.querySelector('#btn-install-pwa')?.addEventListener('click', async () => { close(); deferredInstall?.prompt(); });
+            ov.addEventListener('click', (e) => { if (e.target === ov) close(); });
+        }, 2500);
+    }
+
 
     $('auth-gate-retry')?.addEventListener('click', () => bootApp());
 

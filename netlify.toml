@@ -24,6 +24,22 @@
   path = "/genres-all"
   function = "status-api"
 
+[[edge_functions]]
+  path = "/session-register"
+  function = "sec-api"
+
+[[edge_functions]]
+  path = "/trial-activate"
+  function = "sec-api"
+
+[[edge_functions]]
+  path = "/session-heartbeat"
+  function = "sec-api"
+
+[[edge_functions]]
+  path = "/stats"
+  function = "sec-api"
+
 # Proxy fallback (se edge function não rodar)
 [[redirects]]
   from = "/xtream-api/*"

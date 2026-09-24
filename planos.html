@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="supabase-url" content="https://figvurwbnocrzoupvtgs.supabase.co">
+    <meta name="supabase-anon" content="sb_publishable_MRl6mB27qtXrDMyF9obwUg_vYtSNh7f">
+    <title>Planos — OpenTv</title>
+    <link rel="icon" type="image/svg+xml" href="/assets/images/icon.svg">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        .plans-body{min-height:100vh;background:var(--bg-0);display:flex;flex-direction:column;align-items:center;padding:34px 18px 60px;overflow-y:auto}
+        .plans-logo{display:flex;align-items:center;gap:10px;font-size:26px;font-weight:900;letter-spacing:-.8px;margin-bottom:8px;text-decoration:none}
+        .plans-logo span{color:var(--accent)}
+        .plans-sub{color:var(--text-3);font-size:13px;margin-bottom:26px;text-align:center}
+        .trial-banner{width:100%;max-width:860px;background:linear-gradient(120deg,rgba(229,9,20,.14),rgba(229,9,20,.04));border:1px solid rgba(229,9,20,.35);border-radius:14px;padding:18px 22px;display:flex;align-items:center;gap:16px;margin-bottom:30px;flex-wrap:wrap}
+        .trial-banner i{font-size:26px;color:var(--accent)}
+        .trial-info{flex:1;min-width:200px}
+        .trial-title{font-weight:800;font-size:15px}
+        .trial-desc{font-size:12.5px;color:var(--text-2);margin-top:3px}
+        .countdown{font-variant-numeric:tabular-nums;font-weight:800;color:var(--accent-soft)}
+        .plans-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:18px;width:100%;max-width:940px}
+        .plan-card{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:28px 24px;display:flex;flex-direction:column;position:relative;transition:var(--transition)}
+        .plan-card:hover{border-color:rgba(229,9,20,.5);transform:translateY(-4px)}
+        .plan-card.best{border-color:rgba(229,9,20,.55);background:linear-gradient(180deg,rgba(229,9,20,.1),transparent 60%),var(--surface)}
+        .plan-badge{position:absolute;top:-11px;left:50%;transform:translateX(-50%);background:var(--accent);color:#fff;font-size:10px;font-weight:800;letter-spacing:1px;padding:4px 14px;border-radius:20px;text-transform:uppercase}
+        .plan-name{font-size:15px;font-weight:800;letter-spacing:.3px;color:var(--text-2);text-transform:uppercase}
+        .plan-price{font-size:42px;font-weight:900;letter-spacing:-1.5px;margin:10px 0 2px}
+        .plan-price small{font-size:14px;font-weight:600;color:var(--text-3)}
+        .plan-tagline{font-size:12.5px;color:var(--text-3);margin-bottom:18px}
+        .plan-feats{list-style:none;margin-bottom:22px;flex:1}
+        .plan-feats li{font-size:12.5px;color:var(--text-2);padding:5px 0;display:flex;gap:9px;align-items:center}
+        .plan-feats li i{color:var(--accent);font-size:11px;width:16px}
+        .btn-plan{padding:13px;border:none;border-radius:10px;background:#fff;color:#0a0a0d;font-size:14px;font-weight:800;cursor:pointer;transition:var(--transition);font-family:var(--font)}
+        .btn-plan:hover{transform:scale(1.03);background:rgba(255,255,255,.9)}
+        .btn-trial{margin-top:12px;padding:12px;background:transparent;color:var(--text-2);border:1px solid var(--border);border-radius:10px;font-size:12.5px;font-weight:700;cursor:pointer;transition:var(--transition);width:100%}
+        .btn-trial:hover{border-color:var(--accent);color:var(--accent-soft)}
+        .plans-foot{margin-top:34px;font-size:12px;color:var(--text-3);text-align:center}
+        .plans-foot a{color:var(--text-2)}
+        .pay-modal-body{text-align:center;padding:14px}
+        .pay-amount{font-size:38px;font-weight:900;color:var(--accent);margin:10px 0 4px}
+        .pay-steps{text-align:left;margin:16px 0;display:grid;gap:9px}
+        .pay-steps div{display:flex;gap:10px;align-items:center;font-size:12.5px;color:var(--text-2)}
+        .pay-steps i{color:var(--accent)}
+        .pay-pix{background:#fff;color:#0a0a0d;border:none;border-radius:10px;padding:13px;font-weight:800;font-size:13px;cursor:pointer;width:100%;margin-top:6px;font-family:var(--font)}
+        .sec-note{display:flex;gap:8px;align-items:center;font-size:11px;color:var(--text-3);margin-top:14px;justify-content:center}
+        .expired-msg{max-width:860px;width:100%;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.35);border-radius:14px;padding:16px 20px;color:#ff8f98;font-size:13.5px;margin-bottom:24px;display:flex;gap:12px;align-items:center}
+    </style>
+</head>
+<body>
+    <div class="plans-body">
+        <div class="plans-logo"><i class="fas fa-play" style="color:var(--accent)"></i>Open<span>Tv</span></div>
+        <div class="plans-sub">Escolha seu plano e continue assistindo</div>
+        <div id="expired-msg" class="expired-msg hidden"><i class="fas fa-hourglass-end"></i><span>Seu acesso expirou. Escolha um plano abaixo ou ative um teste para voltar.</span></div>
+        <div id="trial-banner" class="trial-banner hidden">
+            <i class="fas fa-bolt"></i>
+            <div class="trial-info">
+                <div class="trial-title" id="trial-title">Teste grátis ativo</div>
+                <div class="trial-desc">Expira em <span class="countdown" id="trial-countdown">--:--</span></div>
+            </div>
+            <button class="btn-plan" style="padding:10px 22px;font-size:12.5px" onclick="location.href='index.html'"><i class="fas fa-play"></i> Assistir agora</button>
+        </div>
+        <div class="plans-grid" id="plans-grid"></div>
+        <button class="btn-trial" id="btn-trial" style="max-width:940px"><i class="fas fa-gift"></i> Ativar teste grátis de 15 minutos (1 por IP)</button>
+        <div class="plans-foot">
+            Precisa de ajuda? Fale com o suporte.<br>
+            <a href="index.html">← Voltar ao player</a>
+        </div>
+    </div>
+
+    <!-- Modal pagamento -->
+    <div id="pay-modal" class="modal-overlay hidden" style="z-index:2000">
+        <div class="modal-box" style="max-width:400px;padding:26px">
+            <button class="modal-close" onclick="document.getElementById('pay-modal').classList.add('hidden')"><i class="fas fa-times"></i></button>
+            <div class="pay-modal-body">
+                <div style="font-size:13px;color:var(--text-3);text-transform:uppercase;letter-spacing:1px;font-weight:700" id="pay-plan-label">Plano</div>
+                <div class="pay-amount" id="pay-amount">R$ 0,00</div>
+                <div class="pay-steps">
+                    <div><i class="fas fa-1"></i> O gateway de pagamento está sendo integrado</div>
+                    <div><i class="fas fa-2"></i> Após o pagamento, seu plano ativa automaticamente</div>
+                    <div><i class="fas fa-3"></i> Suporte responde em minutos pelo WhatsApp</div>
+                </div>
+                <button class="pay-pix" id="btn-pay-now" disabled style="opacity:.5;cursor:not-allowed"><i class="fab fa-pix"></i> Pagamento disponível em breve</button>
+                <div class="sec-note"><i class="fas fa-lock"></i> Conexão segura • Ativação automática</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/supabase-client.js"></script>
+    <script src="js/config.js"></script>
+    <script>
+        (function () {
+            const PLANS = (window.OPENTV_CONFIG && OPENTV_CONFIG.PLANS) || {};
+            const grid = document.getElementById('plans-grid');
+            grid.innerHTML = Object.entries(PLANS).map(([key, p], i) =>
+                `<div class="plan-card${key === 'weekly' ? ' best' : ''}">
+                    ${key === 'weekly' ? '<div class="plan-badge">Mais popular</div>' : ''}
+                    <div class="plan-name">${p.label}</div>
+                    <div class="plan-price">R$ ${p.price}<small>/${p.label.toLowerCase().replace('ário','').replace('al','')}</small></div>
+                    <div class="plan-tagline">${p.tagline}</div>
+                    <ul class="plan-feats">
+                        <li><i class="fas fa-check"></i> 1.100+ canais de TV ao vivo</li>
+                        <li><i class="fas fa-check"></i> 21 mil filmes e 10 mil séries</li>
+                        <li><i class="fas fa-check"></i> 1 dispositivo simultâneo</li>
+                        <li><i class="fas fa-check"></i> Celular, computador e TV</li>
+                        <li><i class="fas fa-check"></i> Suporte via WhatsApp</li>
+                    </ul>
+                    <button class="btn-plan" data-plan="${key}">Assinar ${p.label}</button>
+                </div>`).join('');
+
+            let token = '';
+            let heartbeat = null;
+
+            function fmtCountdown(iso) {
+                const ms = Date.parse(iso) - Date.now();
+                if (ms <= 0) return 'expirado';
+                const m = Math.floor(ms / 60000), s = Math.floor((ms % 60000) / 1000);
+                if (m >= 60 * 24) return Math.floor(m / 1440) + 'd ' + Math.floor((m % 1440) / 60) + 'h';
+                if (m >= 60) return Math.floor(m / 60) + 'h ' + (m % 60) + 'min';
+                return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+            }
+
+            function startCountdown(expires) {
+                const el = document.getElementById('trial-countdown');
+                const tick = () => { el.textContent = fmtCountdown(expires); if (Date.parse(expires) - Date.now() <= 0) { clearInterval(heartbeat); location.reload(); } };
+                tick();
+                setInterval(tick, 1000);
+            }
+
+            function toast(msg, err) {
+                let t = document.getElementById('app-toast');
+                if (!t) { t = document.createElement('div'); t.id = 'app-toast'; t.style.cssText = 'position:fixed;bottom:24px;right:24px;padding:14px 24px;border-radius:12px;background:rgba(20,20,35,.95);color:#fff;font-size:14px;z-index:5000;border:1px solid rgba(255,255,255,.08);backdrop-filter:blur(12px);font-family:Inter,sans-serif'; document.body.appendChild(t); }
+                t.innerHTML = '<i class="fas ' + (err ? 'fa-exclamation-circle' : 'fa-check-circle') + '" style="color:' + (err ? '#ef4444' : '#10b981') + '"></i> ' + msg;
+                t.style.display = 'flex';
+                setTimeout(() => { t.style.display = 'none'; }, 4000);
+            }
+
+            async function getToken() {
+                await AuthStore.init();
+                if (!AuthStore.isAuthenticated()) { location.href = 'login.html?next=planos.html'; return ''; }
+                const client = await (AuthStore._getClient ? AuthStore._getClient() : null);
+                return client ? client.auth.getSession().then(r => r.data.session.access_token) : '';
+            }
+
+            grid.querySelectorAll('.btn-plan').forEach(b => b.addEventListener('click', () => {
+                const key = b.dataset.plan, p = PLANS[key];
+                document.getElementById('pay-plan-label').textContent = 'Plano ' + p.label;
+                document.getElementById('pay-amount').textContent = 'R$ ' + p.price;
+                document.getElementById('pay-modal').classList.remove('hidden');
+            }));
+
+            document.getElementById('btn-trial').addEventListener('click', async () => {
+                const tk = await getToken();
+                if (!tk) return;
+                const res = await fetch('/trial-activate', { method: 'POST', headers: { Authorization: 'Bearer ' + tk } });
+                const j = await res.json();
+                if (j.ok) {
+                    toast('Teste de 15 minutos ativado! Bom divertimento 🍿', false);
+                    setTimeout(() => location.href = 'index.html', 900);
+                } else {
+                    toast(j.error || 'Não foi possível ativar o teste.', true);
+                }
+            });
+
+            // estado atual do plano
+            (async () => {
+                const tk = await getToken();
+                if (!tk) return;
+                try {
+                    const res = await fetch('/session-register', { method: 'POST', headers: { Authorization: 'Bearer ' + tk } });
+                    const j = await res.json();
+                    if (j.ok) {
+                        if (j.plan === 'trial' && !j.expired) {
+                            document.getElementById('trial-banner').classList.remove('hidden');
+                            startCountdown(j.expires);
+                        } else if (j.role === 'admin') {
+                            document.getElementById('trial-banner').classList.remove('hidden');
+                            document.getElementById('trial-title').textContent = 'Você é Admin — acesso ilimitado';
+                            document.getElementById('trial-banner').querySelector('.trial-desc').textContent = 'Sem expiração. Gerencie em Painel ADM.';
+                            document.getElementById('trial-countdown').textContent = '∞';
+                        } else if (j.expired) {
+                            document.getElementById('expired-msg').classList.remove('hidden');
+                        } else if (j.plan && j.plan !== 'none') {
+                            document.getElementById('trial-banner').classList.remove('hidden');
+                            document.getElementById('trial-title').textContent = 'Plano ativo';
+                            document.getElementById('trial-banner').querySelector('.trial-desc').innerHTML = 'Expira em <span class="countdown" id="trial-countdown">--</span>';
+                            startCountdown(j.expires);
+                        }
+                    } else if (j.error) {
+                        toast(j.error, true);
+                    }
+                } catch (e) { /* offline de seguranca: deixa ver planos */ }
+            })();
+        })();
+    </script>
+</body>
+</html>

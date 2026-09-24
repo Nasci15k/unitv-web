@@ -6,7 +6,9 @@
     <meta name="supabase-url" content="https://figvurwbnocrzoupvtgs.supabase.co">
     <meta name="supabase-anon" content="sb_publishable_MRl6mB27qtXrDMyF9obwUg_vYtSNh7f">
     <title>OpenTv — Player IPTV</title>
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23e50914'/><text x='50' y='68' font-size='50' font-weight='bold' text-anchor='middle' fill='white' font-family='Arial'>OT</text></svg>">
+    <link rel="icon" type="image/svg+xml" href="/assets/images/icon.svg">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <meta name="theme-color" content="#e50914">
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="preconnect" href="https://cdn.jsdelivr.net">
@@ -462,8 +464,7 @@
     </nav>
 
     <script src="js/config.js"></script>
-    <script src="js/api.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/api.js"></script>    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="js/supabase-client.js"></script>
     <script src="js/i18n.js"></script>
     <script src="js/subtitles.js"></script>
@@ -471,5 +472,7 @@
     <script src="js/app.js"></script>
     <script src="js/image-guard.js"></script>
     <script src="js/settings.js"></script>
+    <script src="js/tv-nav.js"></script>
+    <script>if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/sw.js').catch(function(){}); }</script>
 </body>
 </html>
