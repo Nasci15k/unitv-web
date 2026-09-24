@@ -636,6 +636,11 @@
         }).catch(() => {});
     });
 
+    window.addEventListener('opentv:toast', (e) => {
+        const d = e.detail || {};
+        showToast(d.msg || '', d.type === 'error' ? 'error' : 'success');
+    });
+
     // ===== HEVC: troca automatica pela versao H.264 do canal =====
     function findH264Twin(streamId, title) {
         const norm = (n) => String(n || '').toLowerCase()

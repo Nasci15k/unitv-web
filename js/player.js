@@ -399,7 +399,7 @@ class VideoPlayer {
                 hasAudio: true,
                 hasVideo: true
             }, {
-                enableWorker: true,
+                enableWorker: !(/Mobi|Android/i.test(navigator.userAgent || '')),
                 enableStashBuffer: true,
                 stashInitialSize: 128,
                 autoCleanupSourceBuffer: true,
@@ -493,7 +493,7 @@ class VideoPlayer {
 
         this.hls.on(Hls.Events.MANIFEST_PARSED, () => {
             this.loader.classList.add('hidden');
-            this.videoEl.play().catch(() => {});
+            this.smartPlay();
             this.populateHLSSubtitles();
             this.populateHLSAudioTracks();
             this.populateHLSQualityInfo();
@@ -636,7 +636,7 @@ class VideoPlayer {
             resolved = true;
             if (this.mseFallbackTimer) { clearTimeout(this.mseFallbackTimer); this.mseFallbackTimer = null; }
             this.loader.classList.add('hidden');
-            this.videoEl.play().catch(() => {});
+            this.smartPlay();
             this._maybeLoadSubs();
             this.populateNativeSubtitles();
             this.populateNativeQualityInfo();
@@ -914,7 +914,7 @@ class VideoPlayer {
 
                         this.videoEl.onloadeddata = () => {
                             this.loader.classList.add('hidden');
-                            this.videoEl.play().catch(() => {});
+                            this.smartPlay();
                             this.resumeIfPossible();
                         };
                         this.videoEl.oncanplay = () => {
@@ -1090,14 +1090,14 @@ class VideoPlayer {
         this.videoEl.load();
         this.videoEl.onloadeddata = () => {
             this.loader.classList.add('hidden');
-            this.videoEl.play().catch(() => {});
+            this.smartPlay();
             this.populateNativeSubtitles();
             this.populateNativeQualityInfo();
         };
         this.videoEl.oncanplay = () => {
             if (!this.loader.classList.contains('hidden')) {
                 this.loader.classList.add('hidden');
-                this.videoEl.play().catch(() => {});
+                this.smartPlay();
             }
         };
         this.videoEl.onerror = () => {
@@ -1113,7 +1113,7 @@ class VideoPlayer {
         this.videoEl.src = url;
         this.videoEl.addEventListener('loadedmetadata', () => {
             this.loader.classList.add('hidden');
-            this.videoEl.play().catch(() => {});
+            this.smartPlay();
             this.resumeIfPossible();
             this.populateNativeSubtitles();
             this.populateNativeQualityInfo();
@@ -1141,6 +1141,26 @@ class VideoPlayer {
         try {
             window.dispatchEvent(new CustomEvent('opentv:live-status', { detail: { streamId: String(this.currentStreamId), ok: !!ok } }));
         } catch (e) {}
+    }
+
+    // play com fallback de autoplay: mobile bloquea play com som fora do gesto do usuario.
+    // Se bloquear, inicia MUTADO (permitido) e avisa pra tocar no alto-falante.
+    smartPlay() {
+        if (!this.videoEl) return;
+        let p;
+        try { p = this.videoEl.play(); } catch (e) { p = null; }
+        if (!p || !p.catch) return;
+        p.catch(err => {
+            const name = err && err.name;
+            if (name === 'NotAllowedError' || name === 'AbortError' || name === 'NotAllowedErrorDOMException') {
+                this.videoEl.muted = true;
+                if (this.btnMute) this.btnMute.innerHTML = '<i class="fas fa-volume-mute"></i>';
+                let p2;
+                try { p2 = this.videoEl.play(); } catch (e) { p2 = null; }
+                if (p2 && p2.catch) p2.catch(() => {});
+                try { window.dispatchEvent(new CustomEvent('opentv:toast', { detail: { msg: 'Toque no alto-falante (🔇) para ativar o som', type: 'info' } })); } catch (e) {}
+            }
+        });
     }
 
     // Canal HEVC sem suporte no navegador: pede pro app trocar pela versao H.264 do canal
@@ -1174,7 +1194,7 @@ class VideoPlayer {
     togglePlay() {
         if (!this.videoEl) return;
         if (this.videoEl.paused) {
-            this.videoEl.play().catch(() => {});
+            this.smartPlay();
             if (this.btnPlayPause) this.btnPlayPause.innerHTML = '<i class="fas fa-pause"></i>';
         } else {
             this.videoEl.pause();

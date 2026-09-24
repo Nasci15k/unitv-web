@@ -83,11 +83,11 @@ async function checkChannels() {
         try {
             const res = await fetch(`${UPSTREAM}/live/${encodeURIComponent(USER)}/${encodeURIComponent(PASS)}/${s.stream_id}.ts`, {
                 headers: { Range: 'bytes=0-1', 'User-Agent': 'Mozilla/5.0' },
-                redirect: 'follow',
+                redirect: 'manual', // 302 -> CDN http e NORMAL e conta como online; 'follow' falha pq o runtime bloqueia http inseguro
                 signal: AbortSignal.timeout(PROBE_TIMEOUT)
             });
             const idx = live.indexOf(s);
-            if (res.status === 200 || res.status === 206 || res.status === 302) statuses[idx].status = 'online';
+            if ([200, 206, 301, 302, 307, 308].includes(res.status)) statuses[idx].status = 'online';
         } catch (e) { /* offline */ }
     });
     const online = statuses.filter(s => s.status === 'online').length;
