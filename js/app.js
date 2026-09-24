@@ -15,12 +15,20 @@
     const PER_PAGE = 48;
     const PLACEHOLDER_IMG = 'assets/images/placeholder.svg';
     const DEAD_IMG_HOSTS = { 'logos.imperioapps.xyz': 1, 'loopstatic.net': 1, '32q0d.xyz': 1, 'fenix7.com': 1, 'imagizer.imageshack.com': 1, 'cplay2.live': 1, 'cplay.live': 1 };
+    // Hosts confiaveis que o browser acessa direto. Todo o resto vai pelo proxy Edge (nao trava o pool de conexoes do browser)
+    const GOOD_IMG_HOSTS = { 'i.imgur.com': 1, 'pixcdn.cfd': 1, 'top-logos.xyz': 1, 'i.ytimg.com': 1, 'm.media-amazon.com': 1, 'i.pinimg.com': 1, 'sm1.imgs.sapo.pt': 1 };
+    function imgProxyUrl(href) {
+        return location.origin + '/xtream-stream/__f/' + encodeURIComponent(href);
+    }
     function safeImg(url) {
         if (!url || !url.trim()) return PLACEHOLDER_IMG;
         try {
             let u = new URL(url, location.href);
             if (DEAD_IMG_HOSTS[u.hostname]) return PLACEHOLDER_IMG;
-            if (u.protocol === 'http:') { u.protocol = 'https:'; return u.href; }
+            if (u.protocol === 'http:') u.protocol = 'https:';
+            const h = u.hostname;
+            const good = u.origin === location.origin || GOOD_IMG_HOSTS[h] || /(^|\.)gstatic\.com$/.test(h) || /(^|\.)netlify\.(app|com)$/.test(h);
+            if (!good && /^https?:$/.test(u.protocol)) return imgProxyUrl(u.href);
             return u.href;
         } catch (e) { return PLACEHOLDER_IMG; }
     }
@@ -834,7 +842,7 @@
             let meta = '';
             if (featured.year) meta += '<span class="meta-badge"><i class="fas fa-calendar"></i> ' + esc(featured.year) + '</span>';
             if (featured.rating) meta += '<span class="meta-badge"><i class="fas fa-star" style="color:var(--warning)"></i> ' + esc(String(featured.rating)) + '</span>';
-            $('hero-banner').innerHTML = '<div class="hero-banner-inner"><div class="hero-bg" style="background-image:url(\'' + (featured.stream_icon || '') + '\')"></div><div class="hero-content"><div class="hero-badge">FILME</div><h2>' + esc(featured.name) + '</h2>' + (meta ? '<div class="hero-meta">' + meta + '</div>' : '') + '<div class="hero-actions"><button class="btn-hero primary" id="hero-play"><i class="fas fa-play"></i> Assistir</button><button class="btn-hero secondary" id="hero-info"><i class="fas fa-info-circle"></i> Detalhes</button></div></div></div>';
+            $('hero-banner').innerHTML = '<div class="hero-banner-inner"><div class="hero-bg" style="background-image:url(\'' + safeImg(featured.stream_icon || '') + '\')"></div><div class="hero-content"><div class="hero-badge">FILME</div><h2>' + esc(featured.name) + '</h2>' + (meta ? '<div class="hero-meta">' + meta + '</div>' : '') + '<div class="hero-actions"><button class="btn-hero primary" id="hero-play"><i class="fas fa-play"></i> Assistir</button><button class="btn-hero secondary" id="hero-info"><i class="fas fa-info-circle"></i> Detalhes</button></div></div></div>';
             $('hero-play')?.addEventListener('click', () => playItem('movie', featured.stream_id, featured.name));
             $('hero-info')?.addEventListener('click', () => showMovieDetail(featured));
         }
@@ -1133,11 +1141,42 @@
         const c = $('channel-list');
         if (!channels.length) { c.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><i class="fas fa-tv"></i><p>Nenhum canal encontrado</p></div>'; return; }
         c.innerHTML = '';
-        channels.forEach((s, i) => c.appendChild(createChannelCard(s, i)));
         if (channels.length && channels[0].stream_id) loadEpgForChannel(channels[0].stream_id);
-        if ('IntersectionObserver' in window) {
-            observeChannelStatus(c);
+        // Render em blocos (nao trava a UI com 1488 cards de uma vez)
+        const CHUNK = 60;
+        let idx = 0;
+        const io = ('IntersectionObserver' in window) ? new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    probeChannelStatus(entry.target);
+                    loadMiniEpg(entry.target);
+                    io.unobserve(entry.target);
+                }
+            });
+        }, { root: c.closest('.content-area') || null, rootMargin: '250px' }) : null;
+        const appendChunk = () => {
+            const frag = document.createDocumentFragment();
+            const end = Math.min(idx + CHUNK, channels.length);
+            for (; idx < end; idx++) {
+                const card = createChannelCard(channels[idx], idx);
+                frag.appendChild(card);
+                if (io) io.observe(card);
+            }
+            c.appendChild(frag);
+            if (idx < channels.length) requestAnimationFrame(appendChunk);
+        };
+        if (channels.length <= CHUNK) {
+            const frag = document.createDocumentFragment();
+            channels.forEach((s, i) => {
+                const card = createChannelCard(s, i);
+                frag.appendChild(card);
+                if (io) io.observe(card);
+            });
+            c.appendChild(frag);
         } else {
+            requestAnimationFrame(appendChunk);
+        }
+        if (!io) {
             c.querySelectorAll('.channel-card[data-stream-id]').forEach(card => {
                 probeChannelStatus(card);
                 loadMiniEpg(card);

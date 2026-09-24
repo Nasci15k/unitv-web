@@ -49,11 +49,13 @@ export default async (request, context) => {
     fwd.set('Accept', request.headers.get('Accept') || '*/*');
 
     let upstream;
+    const probablyImage = /\.(jpe?g|png|webp|svg|gif|ico)(\?|$)/i.test(parsed.pathname);
     try {
         upstream = await fetch(parsed.href, {
             method: request.method === 'HEAD' ? 'HEAD' : 'GET',
             headers: fwd,
-            redirect: 'follow'
+            redirect: 'follow',
+            signal: probablyImage ? AbortSignal.timeout(10000) : undefined
         });
     } catch {
         return new Response('Bad Gateway', { status: 502, headers: { 'Access-Control-Allow-Origin': '*' } });
@@ -62,12 +64,20 @@ export default async (request, context) => {
     const resHeaders = new Headers(upstream.headers);
     resHeaders.delete('content-encoding');
     resHeaders.set('Access-Control-Allow-Origin', '*');
-    resHeaders.set('Cache-Control', 'no-cache');
-    if (!resHeaders.get('Accept-Ranges')) resHeaders.set('Accept-Ranges', 'bytes');
 
     const ct = (upstream.headers.get('content-type') || '').toLowerCase();
     const finalUrl = upstream.url || parsed.href;
     const isPlaylist = ct.includes('mpegurl') || /\.m3u8(\?|$)/i.test(parsed.pathname);
+    // Imagens (via __f): cache longo no Edge pra ficar rapido e aliviar o provedor
+    const isImage = ct.startsWith('image/') || /\.(jpe?g|png|webp|svg|gif|ico)(\?|$)/i.test(parsed.pathname);
+    if (isImage) {
+        resHeaders.set('Cache-Control', 'public, max-age=604800');
+    } else if (isPlaylist) {
+        resHeaders.set('Cache-Control', 'no-cache');
+    } else {
+        resHeaders.set('Cache-Control', 'no-cache');
+    }
+    if (!resHeaders.get('Accept-Ranges') && !isPlaylist && !isImage) resHeaders.set('Accept-Ranges', 'bytes');
 
     if (isPlaylist && request.method !== 'HEAD') {
         resHeaders.delete('content-length');

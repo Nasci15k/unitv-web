@@ -1,4 +1,4 @@
-class VideoPlayer {
+﻿class VideoPlayer {
     constructor() {
         this.hls = null;
         this.mpegtsPlayer = null;
@@ -26,6 +26,7 @@ class VideoPlayer {
         this.playAttempt = 0;
         this.mediaRecoverCount = 0;
         this._mkvMpegtsTried = false;
+        this._cameFromHls = false;
         this._vodMpegtsTried = false;
         this._inMkvFallback = false;
         this._mkvMpegtsTimer = null;
@@ -172,6 +173,7 @@ class VideoPlayer {
         this.playAttempt = 0;
         this.mediaRecoverCount = 0;
         this._mkvMpegtsTried = false;
+        this._cameFromHls = false;
         this._vodMpegtsTried = false;
         this._inMkvFallback = false;
         if (this._mkvMpegtsTimer) { clearTimeout(this._mkvMpegtsTimer); this._mkvMpegtsTimer = null; }
@@ -443,7 +445,7 @@ class VideoPlayer {
                 if (errType === mpegts.ErrorTypes.NETWORK_ERROR || errType === mpegts.ErrorTypes.MEDIA_ERROR) {
                     console.log('[MPEGTS] Error, trying fallback playback');
                     this.destroyMpegts();
-                    if (this.isLive) {
+                    if (this.isLive && !this._cameFromHls) {
                         this.playHLS(this.toHlsUrl(url));
                     } else {
                         this.playDirect(url);
@@ -513,15 +515,22 @@ class VideoPlayer {
             if (data.fatal) {
                 switch (data.type) {
                     case Hls.ErrorTypes.NETWORK_ERROR:
+                        // .m3u8 que na verdade e TS cru: retry nao tem sentido, vai direto pro mpegts
+                        if (data.details === 'levelParsingError') {
+                            console.log('[HLS] Manifest invalido (TS cru?) â€” caindo pro mpegts');
+                            this.hls.destroy(); this.hls = null;
+                            this._hlsToFallback(url);
+                            return;
+                        }
                         if (this.retryCount < this.maxRetries) {
                             this.retryCount++;
                             setTimeout(() => {
                                 try { this.hls.startLoad(); } catch(e) {}
                             }, 1000 * this.retryCount);
                         } else {
-                            console.log('[HLS] Network errors exhausted, trying direct playback');
+                            console.log('[HLS] Network errors exhausted, trying fallback');
                             this.hls.destroy(); this.hls = null;
-                            this.playDirect(url);
+                            this._hlsToFallback(url);
                         }
                         break;
                     case Hls.ErrorTypes.MEDIA_ERROR:
@@ -533,31 +542,43 @@ class VideoPlayer {
                             if (hevc) {
                                 this.showErrorMessage('Video HEVC (H.265) nao suportado por este navegador. Tente outro canal ou qualidade.');
                             } else {
-                                this.playDirect(url);
+                                this._hlsToFallback(url);
                             }
                             return;
                         }
                         if (this.mediaRecoverCount < 2) {
                             this.mediaRecoverCount++;
                             try { this.hls.recoverMediaError(); } catch (e) {
-                                console.log('[HLS] Recovery failed, trying direct');
+                                console.log('[HLS] Recovery failed, trying fallback');
                                 this.hls.destroy(); this.hls = null;
-                                this.playDirect(url);
+                                this._hlsToFallback(url);
                             }
                         } else {
-                            console.log('[HLS] Media errors exhausted, trying direct');
+                            console.log('[HLS] Media errors exhausted, trying fallback');
                             this.hls.destroy(); this.hls = null;
-                            this.playDirect(url);
+                            this._hlsToFallback(url);
                         }
                         break;
                     default:
-                        console.log('[HLS] Fatal error, trying direct');
+                        console.log('[HLS] Fatal error, trying fallback');
                         this.hls.destroy(); this.hls = null;
-                        this.playDirect(url);
+                        this._hlsToFallback(url);
                         break;
                 }
             }
         });
+    }
+
+    // Fallback pos-HLS: canal ao vivo (TS cru) â†’ mpegts.js; conteudo VOD â†’ direct
+    _hlsToFallback(hlsUrl) {
+        const tsUrl = String(hlsUrl || '').replace(/\.m3u8(?=\?|$)/i, '.ts');
+        const mpegtsOk = typeof mpegts !== 'undefined' && mpegts.isSupported();
+        if (this.isLive && mpegtsOk) {
+            this._cameFromHls = true; // evita voltar pro HLS se o mpegts falhar (ping-pong)
+            this.playMpegts(tsUrl || hlsUrl);
+            return;
+        }
+        this.playDirect(tsUrl || hlsUrl);
     }
 
     async probeVodFormat(url) {
@@ -943,7 +964,7 @@ class VideoPlayer {
             const watchdog = setInterval(() => {
                 if (aborted || ready) { clearInterval(watchdog); return; }
                 if (fedBytes > 60 * 1024 * 1024) {
-                    console.error('[MSE] No moov after 60MB — aborting');
+                    console.error('[MSE] No moov after 60MB â€” aborting');
                     this.showErrorMessage('Formato nao suportado (sem moov/MP4).');
                     cleanup();
                     clearInterval(watchdog);
@@ -955,7 +976,7 @@ class VideoPlayer {
                 if (!response.ok) throw new Error('HTTP ' + response.status);
                 const ctype = (response.headers.get('content-type') || '').toLowerCase();
                 if (ctype.includes('matroska') || ctype.includes('mkv')) {
-                    console.error('[MSE] MKV content-type detected — attempting mpegts fallback');
+                    console.error('[MSE] MKV content-type detected â€” attempting mpegts fallback');
                     cleanup();
                     this.tryMkvFallback(url);
                     return;
@@ -972,7 +993,7 @@ class VideoPlayer {
                         if (firstChunk) {
                             firstChunk = false;
                             if (value.length >= 4 && value[0] === 0x1A && value[1] === 0x45 && value[2] === 0xDF && value[3] === 0xA3) {
-                                console.error('[MSE] EBML/MKV magic detected — attempting mpegts fallback');
+                                console.error('[MSE] EBML/MKV magic detected â€” attempting mpegts fallback');
                                 cleanup();
                                 this.tryMkvFallback(url);
                                 return;
@@ -1025,7 +1046,7 @@ class VideoPlayer {
 
     showMkvError() {
         this._inMkvFallback = false;
-        this.showErrorMessage('Não foi possível reproduzir este vídeo (MKV). Formato MKV não suportado pelo navegador.');
+        this.showErrorMessage('NÃ£o foi possÃ­vel reproduzir este vÃ­deo (MKV). Formato MKV nÃ£o suportado pelo navegador.');
     }
 
     tryMkvFallback(url) {
@@ -1116,6 +1137,7 @@ class VideoPlayer {
         this.mediaRecoverCount = 0;
         this.playAttempt = 0;
         this._mkvMpegtsTried = false;
+        this._cameFromHls = false;
         this._vodMpegtsTried = false;
         this._inMkvFallback = false;
         if (this._mkvMpegtsTimer) { clearTimeout(this._mkvMpegtsTimer); this._mkvMpegtsTimer = null; }
