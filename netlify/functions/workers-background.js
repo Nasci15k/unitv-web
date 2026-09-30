@@ -97,7 +97,15 @@ async function checkChannels() {
     // estatisticas do catalogo pra landing page
     let series = [];
     try { series = await api('action=get_series'); } catch (e) {}
-    await supaUpsert('catalog_stats', [{ key: 'catalog', value: { channels: statuses.length, movies: (vodsTmp && vodsTmp.length) || 0, series: Array.isArray(series) ? series.length : 0 }, updated_at: new Date().toISOString() }], 'key');
+    try {
+        await fetch(`${SUPA}/rest/v1/catalog_stats?key=eq.catalog`, {
+            method: 'PATCH',
+            headers: { apikey: ANON, Authorization: `Bearer ${ANON}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ value: { channels: statuses.length, movies: (vodsTmp && vodsTmp.length) || 0, series: Array.isArray(series) ? series.length : 0 }, updated_at: new Date().toISOString() }),
+            signal: AbortSignal.timeout(20000)
+        });
+        log('catalog_stats atualizado');
+    } catch (e) { log('erro catalog_stats', e.message); }
 }
 
 async function enrichGenres() {
