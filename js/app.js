@@ -443,7 +443,8 @@
         showLoading('Conectando ao servidor...');
         try {
             if (await api.authenticate() && api.userData) {
-                userDisplay.textContent = api.userData.username || 'Usuario';
+                const contaEmail = (window.AuthStore && AuthStore.getUser && AuthStore.getUser() && AuthStore.getUser().email) || 'Usuário';
+                userDisplay.textContent = contaEmail;
                 showLoading('Carregando conteudo...');
                 await loadAllData();
                 showToast('Bem-vindo ao OpenTv!', 'success');
@@ -2543,6 +2544,14 @@
         m.classList.add('hidden');
         if (m.id === 'player-modal') player.stop();
     }));
+    window.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape') return;
+        const visiveis = [...document.querySelectorAll('.modal-overlay')].filter(m => getComputedStyle(m).display !== 'none');
+        const topo = visiveis[visiveis.length - 1];
+        if (!topo || topo.id === 'resume-modal') return;
+        topo.classList.add('hidden');
+        if (topo.id === 'player-modal') player.stop();
+    });
 
     bootApp();
 });
