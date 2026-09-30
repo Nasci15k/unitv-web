@@ -42,10 +42,10 @@ async function supaSelectAll(table, select) {
     return rows;
 }
 
-async function supaUpsert(table, rows) {
+async function supaUpsert(table, rows, onConflict = 'stream_id') {
     for (let i = 0; i < rows.length; i += 500) {
         const chunk = rows.slice(i, i + 500);
-        await fetch(`${SUPA}/rest/v1/${table}?on_conflict=stream_id`, {
+        await fetch(`${SUPA}/rest/v1/${table}?on_conflict=${onConflict}`, {
             method: 'POST',
             headers: {
                 apikey: ANON, Authorization: `Bearer ${ANON}`,
@@ -97,7 +97,7 @@ async function checkChannels() {
     // estatisticas do catalogo pra landing page
     let series = [];
     try { series = await api('action=get_series'); } catch (e) {}
-    await supaUpsert('catalog_stats', [{ key: 'catalog', value: { channels: statuses.length, movies: (vodsTmp && vodsTmp.length) || 0, series: Array.isArray(series) ? series.length : 0 }, updated_at: new Date().toISOString() }]);
+    await supaUpsert('catalog_stats', [{ key: 'catalog', value: { channels: statuses.length, movies: (vodsTmp && vodsTmp.length) || 0, series: Array.isArray(series) ? series.length : 0 }, updated_at: new Date().toISOString() }], 'key');
 }
 
 async function enrichGenres() {
