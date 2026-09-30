@@ -831,6 +831,16 @@
         state.vodCats = ContentFilter.filterCats(Array.isArray(vc) ? vc : []);
         state.seriesCats = ContentFilter.filterCats(Array.isArray(sc) ? sc : []);
         api.setLiveCache(state.allLive); api.setMovieCache(state.allMovies); api.setSeriesCache(state.allSeries);
+        // admin conectado -> atualiza estatisticas do catalogo (landing page) com o token dele
+        if (AuthStore.isAdmin()) {
+            try {
+                const cl = AuthStore.getClient && AuthStore.getClient();
+                if (cl) await cl.from('catalog_stats').update({
+                    value: { channels: state.allLive.length, movies: state.allMovies.length, series: state.allSeries.length },
+                    updated_at: new Date().toISOString()
+                }).eq('key', 'catalog');
+            } catch (e) {}
+        }
         renderHome();
         renderLiveSidebar();
         renderFilterModes('movie-filter-modes', 'movies');
