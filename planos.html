@@ -47,6 +47,19 @@
         .pay-pix{background:#fff;color:#0a0a0d;border:none;border-radius:10px;padding:13px;font-weight:800;font-size:13px;cursor:pointer;width:100%;margin-top:6px;font-family:var(--font)}
         .sec-note{display:flex;gap:8px;align-items:center;font-size:11px;color:var(--text-3);margin-top:14px;justify-content:center}
         .expired-msg{max-width:860px;width:100%;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.35);border-radius:14px;padding:16px 20px;color:#ff8f98;font-size:13.5px;margin-bottom:24px;display:flex;gap:12px;align-items:center}
+        .pay-seals{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin-top:22px;max-width:940px;width:100%}
+        .pay-seals span{display:inline-flex;align-items:center;gap:7px;font-size:11.5px;font-weight:700;color:var(--text-2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:7px 14px}
+        .pay-seals i{color:var(--accent);font-size:12px}
+        .plans-faq{width:100%;max-width:940px;margin-top:34px}
+        .plans-faq h3{font-size:16px;font-weight:800;margin-bottom:14px;display:flex;align-items:center;gap:9px}
+        .plans-faq h3 i{color:var(--accent)}
+        .plans-faq details{background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:9px;overflow:hidden}
+        .plans-faq summary{cursor:pointer;padding:14px 18px;font-size:13.5px;font-weight:700;list-style:none;display:flex;justify-content:space-between;align-items:center;transition:background .2s}
+        .plans-faq summary::-webkit-details-marker{display:none}
+        .plans-faq summary::after{content:'+';font-size:18px;color:var(--accent);font-weight:400;transition:transform .2s}
+        .plans-faq details[open] summary::after{transform:rotate(45deg)}
+        .plans-faq summary:hover{background:rgba(255,255,255,.03)}
+        .plans-faq details p{padding:0 18px 15px;font-size:12.5px;color:var(--text-2);line-height:1.6}
     </style>
 </head>
 <body>
@@ -64,9 +77,42 @@
         </div>
         <div class="plans-grid" id="plans-grid"></div>
         <button class="btn-trial" id="btn-trial" style="max-width:940px"><i class="fas fa-gift"></i> Ativar teste grátis de 15 minutos (1 por IP)</button>
+        <div class="pay-seals">
+            <span><i class="fas fa-lock"></i> Ambiente seguro</span>
+            <span><i class="fas fa-bolt"></i> Ativação automática</span>
+            <span><i class="fab fa-pix"></i> Pix e cartão</span>
+            <span><i class="fab fa-whatsapp"></i> Suporte humano</span>
+        </div>
+        <div class="plans-faq">
+            <h3><i class="fas fa-circle-question"></i> Perguntas frequentes</h3>
+            <details>
+                <summary>Em quanto tempo o acesso é liberado?</summary>
+                <p>O teste grátis é liberado na hora. Com o pagamento via Pix ou cartão, a ativação é automática assim que o pagamento confirma.</p>
+            </details>
+            <details>
+                <summary>Posso assistir na TV de casa?</summary>
+                <p>Sim! Funciona em celular, computador, Android TV e Smart TV pelo navegador, e também pelo app APK (download na barra do player).</p>
+            </details>
+            <details>
+                <summary>Quantos dispositivos posso usar ao mesmo tempo?</summary>
+                <p>Os planos Diário e Semanal permitem 1 dispositivo simultâneo; o Mensal permite 2. Cada conta funciona em 1 IP por vez.</p>
+            </details>
+            <details>
+                <summary>Como funciona o teste grátis?</summary>
+                <p>São 15 minutos com acesso completo ao catálogo, 1 vez por IP. É só clicar no botão acima e criar sua conta.</p>
+            </details>
+            <details>
+                <summary>Existe fidelidade ou contrato?</summary>
+                <p>Não. Você paga pelo período escolhido e não tem nenhuma amarra — renova quando quiser.</p>
+            </details>
+            <details>
+                <summary>O pagamento é seguro?</summary>
+                <p>Sim. A integração usa gateway de pagamento reconhecido, com conexão criptografada e ativação automática da sua conta.</p>
+            </details>
+        </div>
         <div class="plans-foot">
             Precisa de ajuda? Fale com o suporte.<br>
-            <a href="index.html">← Voltar ao player</a>
+            <a href="login.html?next=planos.html">Entrar</a> · <a href="login.html?next=planos.html&tab=signup">Criar conta</a> · <a href="index.html">← Voltar ao player</a>
         </div>
     </div>
 
@@ -95,18 +141,14 @@
         (function () {
             const PLANS = (window.OPENTV_CONFIG && OPENTV_CONFIG.PLANS) || {};
             const grid = document.getElementById('plans-grid');
-            grid.innerHTML = Object.entries(PLANS).map(([key, p], i) =>
-                `<div class="plan-card${key === 'weekly' ? ' best' : ''}">
-                    ${key === 'weekly' ? '<div class="plan-badge">Mais popular</div>' : ''}
+            grid.innerHTML = Object.entries(PLANS).map(([key, p]) =>
+                `<div class="plan-card${p.best ? ' best' : ''}">
+                    ${p.best ? '<div class="plan-badge">Mais popular</div>' : ''}
                     <div class="plan-name">${p.label}</div>
                     <div class="plan-price">R$ ${p.price}<small>/${p.label.toLowerCase().replace('ário','').replace('al','')}</small></div>
                     <div class="plan-tagline">${p.tagline}</div>
                     <ul class="plan-feats">
-                        <li><i class="fas fa-check"></i> 1.100+ canais de TV ao vivo</li>
-                        <li><i class="fas fa-check"></i> 21 mil filmes e 10 mil séries</li>
-                        <li><i class="fas fa-check"></i> 1 dispositivo simultâneo</li>
-                        <li><i class="fas fa-check"></i> Celular, computador e TV</li>
-                        <li><i class="fas fa-check"></i> Suporte via WhatsApp</li>
+                        ${(p.features || []).map(f => `<li><i class="fas fa-check"></i> ${f}</li>`).join('')}
                     </ul>
                     <button class="btn-plan" data-plan="${key}">Assinar ${p.label}</button>
                 </div>`).join('');
@@ -140,11 +182,17 @@
 
             async function getToken() {
                 await AuthStore.init();
-                if (!AuthStore.isAuthenticated()) { location.href = 'login.html?next=planos.html'; return ''; }
+                if (!AuthStore.isAuthenticated()) return '';
                 return AuthStore.getAccessToken();
             }
+            function exigirLogin() {
+                location.href = 'login.html?next=planos.html';
+                return '';
+            }
 
-            grid.querySelectorAll('.btn-plan').forEach(b => b.addEventListener('click', () => {
+            grid.querySelectorAll('.btn-plan').forEach(b => b.addEventListener('click', async () => {
+                const tk = await getToken();
+                if (!tk) { exigirLogin(); return; }
                 const key = b.dataset.plan, p = PLANS[key];
                 document.getElementById('pay-plan-label').textContent = 'Plano ' + p.label;
                 document.getElementById('pay-amount').textContent = 'R$ ' + p.price;
@@ -153,7 +201,7 @@
 
             document.getElementById('btn-trial').addEventListener('click', async () => {
                 const tk = await getToken();
-                if (!tk) return;
+                if (!tk) { exigirLogin(); return; }
                 const res = await fetch('/trial-activate', { method: 'POST', headers: { Authorization: 'Bearer ' + tk } });
                 const j = await res.json();
                 if (j.ok) {

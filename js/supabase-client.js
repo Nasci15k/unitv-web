@@ -219,6 +219,27 @@
     });
   }
 
+  function resetPassword(email) {
+    return init().then(function () {
+      if (demoMode) throw new Error('Modo demo: recuperação de senha indisponível.');
+      return client.auth.resetPasswordForEmail(email, {
+        redirectTo: location.origin + '/login.html?next=' + encodeURIComponent(nextParam())
+      }).then(function () { return true; })
+        .catch(function (err) { throw new Error(ptError(err)); });
+    });
+  }
+  function nextParam() {
+    try { return new URLSearchParams(location.search).get('next') || 'index.html'; } catch (e) { return 'index.html'; }
+  }
+  function updatePassword(newPassword) {
+    return init().then(function () {
+      if (demoMode) throw new Error('Modo demo: alteração de senha indisponível.');
+      return client.auth.updateUser({ password: newPassword })
+        .then(function () { return true; })
+        .catch(function (err) { throw new Error(ptError(err)); });
+    });
+  }
+
   function signOut() {
     return init().then(function () {
       if (demoMode) {
@@ -266,6 +287,8 @@
     signIn: signIn,
     signUp: signUp,
     signOut: signOut,
+    resetPassword: resetPassword,
+    updatePassword: updatePassword,
     onAuthChange: function (cb) {
       if (typeof cb !== 'function') return function () {};
       listeners.push(cb);

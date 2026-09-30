@@ -57,6 +57,17 @@
     <div class="field"><label for="si-email">E-mail</label><input id="si-email" type="email" required autocomplete="email" placeholder="voce@email.com"></div>
     <div class="field"><label for="si-pass">Senha</label><input id="si-pass" type="password" required autocomplete="current-password" placeholder="••••••••"></div>
     <button class="btn" type="submit" id="btn-signin">Entrar</button>
+    <button type="button" id="link-forgot" style="background:none;border:none;color:var(--text3);font-size:12px;cursor:pointer;font-family:var(--font);text-align:right;margin-top:-4px">Esqueci minha senha</button>
+  </form>
+  <form id="form-forgot" class="hidden" novalidate>
+    <div class="field"><label for="fg-email">E-mail da sua conta</label><input id="fg-email" type="email" required autocomplete="email" placeholder="voce@email.com"></div>
+    <button class="btn" type="submit" id="btn-forgot">Enviar link de redefinição</button>
+    <button type="button" id="link-back-signin" style="background:none;border:none;color:var(--text3);font-size:12px;cursor:pointer;font-family:var(--font);text-align:center">← Voltar ao login</button>
+  </form>
+  <form id="form-newpass" class="hidden" novalidate>
+    <div class="field"><label for="np-pass">Nova senha (mín. 6)</label><input id="np-pass" type="password" required minlength="6" autocomplete="new-password" placeholder="••••••••"></div>
+    <div class="field"><label for="np-pass2">Confirmar nova senha</label><input id="np-pass2" type="password" required minlength="6" autocomplete="new-password" placeholder="••••••••"></div>
+    <button class="btn" type="submit" id="btn-newpass">Salvar nova senha</button>
   </form>
   <form id="form-signup" class="hidden" novalidate>
     <div class="field"><label for="su-name">Nome</label><input id="su-name" type="text" autocomplete="name" placeholder="Seu nome"></div>
@@ -99,6 +110,17 @@
     });
     formSignin.classList.toggle('hidden', name !== 'signin');
     formSignup.classList.toggle('hidden', name !== 'signup');
+    $('form-forgot').classList.add('hidden');
+    if (name !== 'recovery') $('form-newpass').classList.add('hidden');
+    clearMsg();
+  }
+  function showForm(which) {
+    tabs.forEach(function (t) { t.classList.remove('active'); });
+    formSignin.classList.add('hidden');
+    formSignup.classList.add('hidden');
+    $('form-forgot').classList.add('hidden');
+    $('form-newpass').classList.add('hidden');
+    $(which).classList.remove('hidden');
     clearMsg();
   }
   function nextUrl() {
@@ -129,11 +151,52 @@
     t.addEventListener('click', function () { switchTab(t.dataset.tab); });
   });
 
+  // --- recuperação de senha ---
+  var isRecovery = /type=recovery|#access_token=/.test(location.hash || '');
+  $('link-forgot').addEventListener('click', function () {
+    $('fg-email').value = $('si-email').value.trim();
+    showForm('form-forgot');
+  });
+  $('link-back-signin').addEventListener('click', function () { switchTab('signin'); });
+  $('form-forgot').addEventListener('submit', function (e) {
+    e.preventDefault();
+    clearMsg();
+    var email = $('fg-email').value.trim();
+    if (!email || email.indexOf('@') < 0) { flash('err', 'Informe um e-mail válido.'); return; }
+    setBusy($('btn-forgot'), true, 'Enviando...');
+    AuthStore.resetPassword(email).then(function () {
+      flash('ok', 'Link enviado! Confira seu e-mail (e a caixa de spam) para redefinir a senha.');
+      setBusy($('btn-forgot'), false, 'Enviar link de redefinição');
+    }).catch(function (err) {
+      flash('err', (err && err.message) || 'Não foi possível enviar o link.');
+      setBusy($('btn-forgot'), false, 'Enviar link de redefinição');
+    });
+  });
+  $('form-newpass').addEventListener('submit', function (e) {
+    e.preventDefault();
+    clearMsg();
+    var p1 = $('np-pass').value, p2 = $('np-pass2').value;
+    if (p1.length < 6) { flash('err', 'A senha precisa de pelo menos 6 caracteres.'); return; }
+    if (p1 !== p2) { flash('err', 'As senhas não conferem.'); return; }
+    setBusy($('btn-newpass'), true, 'Salvando...');
+    AuthStore.updatePassword(p1).then(function () {
+      flash('ok', 'Senha alterada com sucesso! Entrando...');
+      setTimeout(function () { location.href = nextUrl(); }, 900);
+    }).catch(function (err) {
+      flash('err', (err && err.message) || 'Não foi possível alterar a senha.');
+      setBusy($('btn-newpass'), false, 'Salvar nova senha');
+    });
+  });
+  if (isRecovery) showForm('form-newpass');
+  var qTab = new URLSearchParams(location.search).get('tab');
+  if (!isRecovery && qTab === 'signup') switchTab('signup');
+
   if (AuthStore.isDemo()) {
     $('auth-mode-hint').textContent = 'Modo demo local (Supabase offline).';
   }
 
   AuthStore.init().then(function () {
+    if (isRecovery) return; // link de redefinição: deixa o form de nova senha aberto
     if (AuthStore.isAuthenticated()) {
       var st = AuthStore.getStatus();
       if (st === 'pending' && !AuthStore.isAdmin()) {

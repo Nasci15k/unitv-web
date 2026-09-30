@@ -31,6 +31,7 @@
         .lp-stat b i{font-size:15px;color:var(--accent);margin-right:3px}
         .lp-stat span{font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.8px;font-weight:700}
         .lp-hero-visual{position:relative}
+        .lp-hero-visual .hero-shot{display:block;width:100%;height:auto;border-radius:16px;border:1px solid var(--border-hover);box-shadow:var(--shadow-lg)}
         .lp-hero-visual .screen{background:linear-gradient(160deg,var(--surface-2),var(--bg-1));border:1px solid var(--border-hover);border-radius:18px;padding:14px;box-shadow:var(--shadow-lg)}
         .lp-hero-visual .row{display:flex;gap:8px;margin-top:10px}
         .lp-hero-visual .card{background:var(--surface-3);border-radius:8px;height:86px;flex:1;position:relative;overflow:hidden}
@@ -64,7 +65,7 @@
                 <h1>Toda a TV do Brasil, <em>filmes e séries</em>, num só lugar.</h1>
                 <p>Esqueça a antena, o aparelhinho de TV caro e 5 assinaturas diferentes. O OpenTv junta canais ao vivo, filmes e séries — no computador, celular, TV Box e smart TV.</p>
                 <div class="lp-ctas">
-                    <a class="lp-btn red" href="login.html?signup=1"><i class="fas fa-bolt"></i> Testar grátis por 15 min</a>
+                    <a class="lp-btn red" href="login.html?next=index.html&tab=signup"><i class="fas fa-bolt"></i> Testar grátis por 15 min</a>
                     <a class="lp-btn ghost" href="login.html"><i class="fas fa-sign-in-alt"></i> Já tenho conta</a>
                 </div>
                 <div class="lp-stats">
@@ -74,15 +75,7 @@
                 </div>
             </div>
             <div class="lp-hero-visual">
-                <div class="screen">
-                    <div class="row" style="margin-top:0">
-                        <div class="card"></div><div class="card" style="flex:2.2"></div><div class="card"></div>
-                    </div>
-                    <div class="row"><div class="card" style="flex:2"></div><div class="card"></div><div class="card"></div></div>
-                    <div class="bar"></div>
-                    <div class="row"><div class="card"></div><div class="card" style="flex:1.4"></div></div>
-                    <div class="row" style="margin-bottom:0"><div class="card" style="flex:.8"></div><div class="card"></div><div class="card" style="flex:1.6"></div></div>
-                </div>
+                <img class="hero-shot" src="assets/images/hero-app.jpg" width="1440" height="900" alt="Print do app OpenTv com destaques e filmes" fetchpriority="high">
             </div>
         </section>
 

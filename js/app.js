@@ -669,6 +669,7 @@
     });
 
     function navigateTo(section) {
+        if (state.section === 'live' && section !== 'live') restoreLiveStage();
         state.section = section;
         document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.section === section));
         document.querySelectorAll('.section').forEach(s => s.classList.toggle('active', s.id === 'section-' + section));
@@ -1449,21 +1450,27 @@
         return { name: 'Variedades & Novelas', icon: 'fa-masks-theater' };
     }
 
+    function liveVisiveis() {
+        return ContentFilter.filterItems(state.allLive, state.liveSection)
+            .filter(s => !ContentFilter.isAdult(s.name || s.category_name || ''));
+    }
+
     function renderLiveSidebar() {
         const c = $('live-categories');
-        // mapeia categorias cruas -> grupos curados
+        // mapeia categorias cruas -> grupos curados (contagens = o que o usuario realmente ve)
+        const visiveis = liveVisiveis();
         const groups = new Map();
         state.liveCats.forEach(cat => {
             const g = liveGroupOf(cat.category_name);
             if (!groups.has(g.name)) groups.set(g.name, { name: g.name, icon: g.icon, catIds: new Set(), count: 0 });
             groups.get(g.name).catIds.add(String(cat.category_id));
         });
-        state.allLive.forEach(s => {
+        visiveis.forEach(s => {
             groups.forEach(g => { if (g.catIds.has(String(s.category_id))) g.count++; });
         });
         state.liveGroups = groups;
         const gl = [...groups.values()].sort((a, b) => b.count - a.count);
-        c.innerHTML = '<button class="live-category-btn active" data-cat=""><i class="fas fa-border-all"></i> <span class="live-cat-name">Todos os Canais</span><span class="live-cat-count">' + state.allLive.length + '</span></button>' +
+        c.innerHTML = '<button class="live-category-btn active" data-cat=""><i class="fas fa-border-all"></i> <span class="live-cat-name">Todos os Canais</span><span class="live-cat-count">' + visiveis.length + '</span></button>' +
             gl.map(g => '<button class="live-category-btn" data-cat="' + [...g.catIds].join(',') + '"><i class="fas ' + g.icon + '"></i> <span class="live-cat-name">' + esc(g.name) + '</span><span class="live-cat-count">' + g.count + '</span></button>').join('');
         c.querySelectorAll('.live-category-btn').forEach(btn => {
             btn.addEventListener('click', () => {
@@ -1479,13 +1486,11 @@
     }
 
     function filterLive(catId) {
-        let filtered = state.allLive;
+        let filtered = liveVisiveis();
         if (catId) {
             const ids = new Set(String(catId).split(',').filter(Boolean));
             filtered = filtered.filter(s => ids.has(String(s.category_id)) || (s.category_ids || []).some(x => ids.has(String(x))));
         }
-        filtered = ContentFilter.filterItems(filtered, state.liveSection);
-        filtered = filtered.filter(s => !ContentFilter.isAdult(s.name || s.category_name || ''));
         renderChannels(filtered);
     }
 
@@ -2336,9 +2341,10 @@
         });
         el.addEventListener('keydown', (e) => {
             if (e.key === 'Backspace' && !el.value && i > 0) { $(arr[i - 1])?.focus(); }
-            if (e.key === 'Enter') handlePinConfirmation();
+            if (e.key === 'Enter') { e.preventDefault(); handlePinConfirmation(); }
         });
     });
+    $('pin-digits')?.addEventListener('submit', (e) => { e.preventDefault(); handlePinConfirmation(); });
     $('btn-pin-confirm')?.addEventListener('click', handlePinConfirmation);
     $('btn-pin-cancel')?.addEventListener('click', hideParentalModal);
     $('btn-pin-remove')?.addEventListener('click', () => {
@@ -2552,6 +2558,35 @@
         topo.classList.add('hidden');
         if (topo.id === 'player-modal') player.stop();
     });
+
+    // ===== Player em modo palco (TV desktop: player fixo dentro da seção) =====
+    const _origPlay = player.play.bind(player);
+    const _origStop = player.stop.bind(player);
+    function restoreLiveStage() {
+        if (player.container && player.container.classList.contains('stage-mode')) player.stop();
+    }
+    player.play = function (url, title, type, opts) {
+        const stage = document.getElementById('live-stage');
+        const desktop = window.matchMedia('(min-width:1024px)').matches;
+        if (type === 'live' && stage && desktop && state.section === 'live' && !document.fullscreenElement) {
+            player.container.classList.add('stage-mode');
+            stage.appendChild(player.container);
+            stage.classList.remove('hidden');
+        }
+        const r = _origPlay(url, title, type, opts);
+        if (player.container.classList.contains('stage-mode')) document.body.style.overflow = '';
+        return r;
+    };
+    player.stop = function () {
+        const eraStage = player.container && player.container.classList.contains('stage-mode');
+        _origStop();
+        if (eraStage) {
+            player.container.classList.remove('stage-mode');
+            document.body.appendChild(player.container);
+            const stage = document.getElementById('live-stage');
+            if (stage) stage.classList.add('hidden');
+        }
+    };
 
     bootApp();
 });

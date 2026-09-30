@@ -47,6 +47,26 @@
         .btn-neu{background:var(--bg-3);color:var(--t2);border:1px solid var(--border)}
         .btn-neu:hover{color:#fff;border-color:rgba(229,9,20,.4)}
         .btn-accent{background:var(--accent);color:#fff}
+        .btn-save{background:#2563eb;color:#fff;padding:6px 12px;font-size:11px;font-weight:700;border:none;border-radius:7px;cursor:pointer;font-family:var(--font);transition:filter .15s}
+        .btn-save:hover{filter:brightness(1.15)}
+        .hide-tests{float:right;font-size:11px;color:var(--t3);font-weight:600;display:flex;align-items:center;gap:6px;cursor:pointer;margin-top:6px}
+        .hide-tests input{accent-color:var(--accent);cursor:pointer}
+        .act-select{padding:5px 7px;font-size:11px;margin:2px;background:var(--bg-3,#232329);color:#fff;border:1px solid var(--border,rgba(255,255,255,.1));border-radius:7px;max-width:120px}
+        .row-actions{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+        .charts-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-bottom:20px}
+        .chart-card{background:var(--bg-2,#16161a);border:1px solid var(--border,rgba(255,255,255,.08));border-radius:12px;padding:18px 20px}
+        .chart-card h4{font-size:12.5px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--t3);margin-bottom:14px}
+        .bar-line{display:grid;grid-template-columns:96px 1fr 42px;align-items:center;gap:10px;margin-bottom:9px;font-size:11.5px}
+        .bar-line .bar-label{color:var(--t2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .bar-track{background:rgba(255,255,255,.06);border-radius:20px;height:9px;overflow:hidden}
+        .bar-fill{height:100%;border-radius:20px;background:linear-gradient(90deg,var(--accent),#ff3341);min-width:2px;transition:width .5s}
+        .bar-val{font-weight:800;color:#fff;text-align:right;font-variant-numeric:tabular-nums}
+        @media(max-width:760px){
+            .card{overflow-x:auto;-webkit-overflow-scrolling:touch}
+            .card table{min-width:780px}
+            .charts-row{grid-template-columns:1fr}
+            .hide-tests{float:none;margin-top:8px}
+        }
         select,input[type=text],input[type=datetime-local],textarea{background:var(--bg-3);border:1px solid var(--border);border-radius:8px;color:var(--t1);font-family:var(--font);padding:9px 12px;font-size:12.5px;outline:none}
         select:focus,input:focus,textarea:focus{border-color:var(--accent)}
         .field{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
@@ -87,7 +107,7 @@
         <div id="tab-users" class="tab-panel">
             <div class="stats-row" id="users-stats"></div>
             <div class="card">
-                <h3><i class="fas fa-users"></i> Usuários <input type="text" id="user-search" placeholder="Buscar e-mail…" style="float:right;width:220px"></h3>
+                <h3><i class="fas fa-users"></i> Usuários <input type="text" id="user-search" placeholder="Buscar e-mail…" style="float:right;width:180px"> <label class="hide-tests"><input type="checkbox" id="hide-tests" checked> ocultar testes</label></h3>
                 <table><thead><tr><th>Usuário</th><th>Status</th><th>Plano</th><th>Expira</th><th>Último IP</th><th>Criado</th><th>Ações</th></tr></thead>
                 <tbody id="users-tbody"></tbody></table>
             </div>
@@ -124,6 +144,7 @@
 
         <div id="tab-stats" class="tab-panel hidden">
             <div class="stats-row" id="adm-stats"></div>
+            <div class="charts-row" id="adm-charts"></div>
             <div class="card">
                 <h3><i class="fas fa-credit-card"></i> Pagamentos</h3>
                 <table><thead><tr><th>Quando</th><th>Usuário</th><th>Plano</th><th>Valor</th><th>Status</th></tr></thead>
@@ -178,7 +199,10 @@
                 const sessMap = {};
                 (sess || []).forEach(s => sessMap[s.user_id] = s);
                 const q = ($('user-search').value || '').toLowerCase();
-                const list = (users || []).filter(u => !q || String(u.email || '').toLowerCase().includes(q));
+                const isTeste = e => /teste/i.test(e) || /^(test|demo|fake)/i.test(e);
+                const ocultarTestes = $('hide-tests') && $('hide-tests').checked;
+                const list = (users || []).filter(u => !q || String(u.email || '').toLowerCase().includes(q))
+                    .filter(u => !(ocultarTestes && isTeste(String(u.email || ''))));
 
                 const pend = list.filter(u => u.status === 'pending').length;
                 const actives = Object.values(sessMap).filter(s => Date.now() - Date.parse(s.last_seen) < 10 * 60000).length;
@@ -192,7 +216,7 @@
                     const stPill = u.role === 'admin' ? '<span class="pill plan">ADMIN</span>' :
                         u.status === 'approved' ? '<span class="pill ok">APROVADO</span>' :
                         u.status === 'pending' ? '<span class="pill pend">PENDENTE</span>' : '<span class="pill rej">RECUSADO</span>';
-                    const planPill = u.role === 'admin' ? '<span class="pill plan">∞</span>' :
+                    const planPill = u.role === 'admin' ? '<span class="pill plan">Ilimitado</span>' :
                         u.plan && u.plan !== 'none' ? '<span class="pill plan">' + u.plan.toUpperCase() + '</span>' : '<span class="pill none">nenhum</span>';
                     const exp = u.role === 'admin' ? '∞' : (u.plan_expires ? timeLeft(u.plan_expires) : '—');
                     return '<tr><td><b>' + esc(u.email || '') + '</b><br><span class="mono">' + esc(u.full_name || '') + '</span></td>' +
@@ -202,34 +226,36 @@
                         '<td>' + userActions(u) + '</td></tr>';
                 }).join('') || '<tr><td colspan="7" class="empty">Nenhum usuário</td></tr>';
 
-                $('users-tbody').querySelectorAll('button[data-act]').forEach(b => b.addEventListener('click', () => userAction(b.dataset)));
+                $('users-tbody').querySelectorAll('[data-act]').forEach(el => {
+                    const ev = el.tagName === 'SELECT' ? 'change' : 'click';
+                    el.addEventListener(ev, () => userAction(el.dataset, el.value));
+                });
             }
 
             function userActions(u) {
-                let h = '';
-                if (u.status !== 'approved') h += '<button class="btn btn-ok" data-act="approve" data-id="' + u.id + '" data-email="' + esc(u.email || '') + '"><i class="fas fa-check"></i> Aprovar</button>';
-                if (u.status !== 'rejected') h += '<button class="btn btn-rej" data-act="reject" data-id="' + u.id + '" data-email="' + esc(u.email || '') + '"><i class="fas fa-xmark"></i></button>';
-                if (u.role !== 'admin') h += userPlanSel(u);
-                return h;
+                if (u.role === 'admin') return '<span class="pill plan">Admin ∞</span>';
+                const stLabels = { pending: 'Pendente', approved: 'Aprovado', rejected: 'Recusado' };
+                const stOpts = Object.entries(stLabels).map(([v, l]) => '<option value="' + v + '"' + (u.status === v ? ' selected' : '') + '>' + l + '</option>').join('');
+                const planLabels = { none: 'Sem plano', trial: 'Trial 15min', daily: 'Diário', weekly: 'Semanal', monthly: 'Mensal' };
+                const curPlan = u.plan || 'none';
+                const pOpts = Object.entries(planLabels).map(([v, l]) => '<option value="' + v + '"' + (curPlan === v ? ' selected' : '') + '>' + l + '</option>').join('');
+                return '<div class="row-actions">' +
+                    '<select class="act-select" data-act="setstatus" data-id="' + u.id + '" title="Status da conta">' + stOpts + '</select>' +
+                    '<select class="act-select" data-act="setplan" data-id="' + u.id + '" title="Plano">' + pOpts + '</select>' +
+                    '</div>';
             }
 
-            function userPlanSel(u) {
-                const opts = ['none', 'trial', 'daily', 'weekly', 'monthly'].map(p => '<option value="' + p + '"' + (u.plan === p ? ' selected' : '') + '>' + p + '</option>').join('');
-                return '<select data-act="setplan" data-id="' + u.id + '" style="padding:5px 7px;font-size:11px;margin:2px">' + opts + '</select>' +
-                    '<button class="btn btn-accent" data-act="applyplan" data-id="' + u.id + '">OK</button>';
-            }
-
-            async function userAction(d) {
+            async function userAction(d, val) {
                 const id = d.id;
                 try {
-                    if (d.act === 'approve' || d.act === 'reject') {
-                        const status = d.act === 'approve' ? 'approved' : 'rejected';
+                    if (d.act === 'setstatus') {
+                        const status = val || d.value;
                         await client.from('profiles').update({ status }).eq('id', id);
-                        toast((d.act === 'approve' ? 'Aprovado: ' : 'Recusado: ') + d.email);
+                        toast('Status atualizado: ' + ({ pending: 'pendente', approved: 'aprovado', rejected: 'recusado' }[status] || status));
                     }
-                    if (d.act === 'applyplan') {
-                        const sel = document.querySelector('select[data-id="' + id + '"]');
-                        const plan = sel ? sel.value : 'none';
+                    if (d.act === 'setplan') {
+                        const sel = document.querySelector('select[data-act="setplan"][data-id="' + id + '"]');
+                        const plan = (val || (sel && sel.value)) || 'none';
                         let expires = null;
                         const mins = { trial: 15, daily: 1440, weekly: 10080, monthly: 43200 };
                         if (mins[plan]) expires = new Date(Date.now() + mins[plan] * 60000).toISOString();
@@ -241,6 +267,7 @@
             }
 
             $('user-search').addEventListener('input', () => loadUsers());
+            $('hide-tests').addEventListener('change', () => loadUsers());
 
             // ===== NOTIFICAÇÕES =====
             async function loadNotifs() {
@@ -280,13 +307,52 @@
             // ===== STATS =====
             function stat(v, label, icon) { return '<div class="stat"><i class="fas ' + icon + '"></i><b>' + v + '</b><span>' + label + '</span></div>'; }
             async function loadStats() {
-                const [{ count: users }, { count: trials }, { data: pay }] = await Promise.all([
+                const [{ count: users }, { count: trials }, { data: pay }, { data: profs }] = await Promise.all([
                     client.from('profiles').select('id', { count: 'exact', head: true }),
                     client.from('trials_used').select('ip', { count: 'exact', head: true }),
-                    client.from('payments').select('email,plan,amount,status,created_at').order('created_at', { ascending: false }).limit(50)
+                    client.from('payments').select('email,plan,amount,status,created_at').order('created_at', { ascending: false }).limit(50),
+                    client.from('profiles').select('plan,status,role,created_at').limit(1000)
                 ]);
                 const paid = (pay || []).filter(p => p.status === 'paid').reduce((a, p) => a + Number(p.amount || 0), 0);
                 $('adm-stats').innerHTML = stat(users, 'Usuários', 'fa-users') + stat(trials, 'Trials usados', 'fa-bolt') + stat('R$ ' + paid.toFixed(2), 'Receita', 'fa-money-bill-wave');
+
+                const lista = profs || [];
+                const bar = (label, val, max) => {
+                    const pct = max > 0 ? Math.max(val > 0 ? 3 : 0, Math.round(val / max * 100)) : 0;
+                    return '<div class="bar-line"><span class="bar-label">' + label + '</span><div class="bar-track"><div class="bar-fill" style="width:' + pct + '%"></div></div><span class="bar-val">' + val + '</span></div>';
+                };
+                // por plano
+                const planCounts = { none: 0, trial: 0, daily: 0, weekly: 0, monthly: 0 };
+                const stCounts = { approved: 0, pending: 0, rejected: 0 };
+                const dias = {};
+                lista.forEach(u => {
+                    planCounts[(u.plan || 'none')] = (planCounts[(u.plan || 'none')] || 0) + 1;
+                    stCounts[u.status] = (stCounts[u.status] || 0) + 1;
+                    if (u.created_at) {
+                        const d = String(u.created_at).slice(0, 10);
+                        dias[d] = (dias[d] || 0) + 1;
+                    }
+                });
+                const maxPlan = Math.max(...Object.values(planCounts), 1);
+                const planLabels = { none: 'Sem plano', trial: 'Trial', daily: 'Diário', weekly: 'Semanal', monthly: 'Mensal' };
+                const planoHtml = Object.entries(planCounts).map(([k, v]) => bar(planLabels[k] || k, v, maxPlan)).join('');
+                const maxSt = Math.max(...Object.values(stCounts), 1);
+                const stLabels = { approved: 'Aprovados', pending: 'Pendentes', rejected: 'Recusados' };
+                const statusHtml = Object.entries(stCounts).map(([k, v]) => bar(stLabels[k] || k, v, maxSt)).join('');
+                const hoje = new Date();
+                const ultimos14 = [];
+                for (let i = 13; i >= 0; i--) {
+                    const d = new Date(hoje); d.setDate(d.getDate() - i);
+                    const key = d.toISOString().slice(0, 10);
+                    ultimos14.push({ key, label: d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }), n: dias[key] || 0 });
+                }
+                const maxDia = Math.max(...ultimos14.map(x => x.n), 1);
+                const cadHtml = ultimos14.map(x => bar(x.label, x.n, maxDia)).join('');
+                $('adm-charts').innerHTML =
+                    '<div class="chart-card"><h4><i class="fas fa-layer-group"></i> Usuários por plano</h4>' + planoHtml + '</div>' +
+                    '<div class="chart-card"><h4><i class="fas fa-user-check"></i> Status das contas</h4>' + statusHtml + '</div>' +
+                    '<div class="chart-card"><h4><i class="fas fa-calendar-day"></i> Cadastros — últimos 14 dias</h4>' + cadHtml + '</div>';
+
                 $('pay-tbody').innerHTML = (pay || []).map(p =>
                     '<tr><td class="mono">' + fmtDate(p.created_at) + '</td><td>' + esc(p.email || '') + '</td><td>' + esc(p.plan) + '</td><td>R$ ' + Number(p.amount || 0).toFixed(2) + '</td>' +
                     '<td><span class="pill ' + (p.status === 'paid' ? 'ok' : 'pend') + '">' + p.status.toUpperCase() + '</span></td></tr>'
@@ -309,6 +375,13 @@
                 }
                 $('gate').classList.add('hidden');
                 $('adm').classList.remove('hidden');
+                // sincroniza lista de admins no app_settings (sec-api usa pra isentar
+                // admins da regra "1 conta por IP" mesmo sem a coluna role no banco)
+                try {
+                    const { data: admins } = await client.from('profiles').select('email').eq('role', 'admin');
+                    const emails = (admins || []).map(a => a.email).filter(Boolean);
+                    if (emails.length) await client.from('app_settings').upsert({ key: 'admin_emails', value: emails }, { onConflict: 'key' });
+                } catch (e) { /* não bloqueia o painel */ }
                 loadUsers();
                 loadNotifs();
                 $('btn-adm-logout').addEventListener('click', async () => { await AuthStore.signOut(); location.href = 'login.html'; });

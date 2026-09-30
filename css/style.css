@@ -34,6 +34,14 @@ html,body{height:100%;font-family:var(--font);background:var(--bg-0);color:var(-
 .auth-gate-logo span{color:var(--accent)}
 .auth-gate-card p{color:var(--text-3);font-size:14px;line-height:1.55;margin-bottom:8px}
 .enter-btn{margin-top:22px;padding:14px 42px;background:var(--accent);border:none;border-radius:6px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;transition:var(--transition);display:inline-flex;align-items:center;gap:10px;font-family:var(--font);text-decoration:none}
+.auth-gate-links{margin-top:18px;display:flex;justify-content:center;gap:20px}
+.auth-gate-links a{color:var(--text-3);font-size:12.5px;text-decoration:none;display:inline-flex;align-items:center;gap:6px;transition:color .2s}
+.auth-gate-links a:hover{color:var(--accent-soft)}
+/* Player em modo palco (seção TV no desktop): player fixo no fluxo da página */
+.live-stage{margin:0 0 14px}
+#player-modal.stage-mode{position:static;inset:auto;display:block;background:none;backdrop-filter:none;animation:none;z-index:1;padding:0;pointer-events:auto}
+#player-modal.stage-mode .modal-box.player-box{position:relative;width:100%;max-width:none;height:auto;max-height:none;border-radius:14px;overflow:hidden;box-shadow:0 18px 50px rgba(0,0,0,.5)}
+@media(max-width:1023px){.live-stage{display:none!important}}
 .enter-btn:hover{background:var(--accent-hover);transform:translateY(-2px);box-shadow:0 10px 30px var(--accent-glow)}
 
 /* ============ TOP NAVBAR (desktop) / DRAWER (mobile) ============ */
@@ -211,7 +219,7 @@ html,body{height:100%;font-family:var(--font);background:var(--bg-0);color:var(-
 .epg-modal-head{display:flex;align-items:center;gap:14px;margin-bottom:16px;padding-right:40px}
 .epg-modal-logo{width:56px;height:56px;border-radius:12px;object-fit:contain;background:rgba(255,255,255,.06);padding:6px;flex-shrink:0}
 .epg-modal-title{font-size:18px;font-weight:800;letter-spacing:-.3px}
-.epg-modal-date{font-size:12px;color:var(--text-3);margin-top:2px;text-transform:capitalize;font-weight:500}
+.epg-modal-date{font-size:12px;color:var(--text-3);margin-top:2px;font-weight:500}
 .epg-list{overflow-y:auto;display:flex;flex-direction:column;gap:2px;padding-right:4px;scrollbar-width:thin}
 .epg-row{display:flex;gap:14px;padding:11px 12px;border-radius:10px;transition:background .2s}
 .epg-row:hover{background:rgba(255,255,255,.04)}

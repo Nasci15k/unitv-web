@@ -104,9 +104,26 @@ export default async (request, context) => {
             }
             // 2) IP já em uso por outra conta? (sessões de ADMIN não contam — admin pode
             //    ter quantas contas quiser no mesmo IP, e não bloqueia outros usuários)
-            const byIp = await supaRest(`active_sessions?select=user_id,ip,last_seen,role&ip=eq.${encodeURIComponent(ip)}&user_id=neq.${uid}`, 'GET', token);
+            //    Camada 1: coluna role em active_sessions (se o SQL tiver sido rodado).
+            let byIp = await supaRest(`active_sessions?select=user_id,ip,last_seen,email,role&ip=eq.${encodeURIComponent(ip)}&user_id=neq.${uid}`, 'GET', token);
+            let temColunaRole = byIp.ok;
+            if (!temColunaRole) {
+                // Camada 2: sem a coluna, cruza os e-mails das sessões com a lista de
+                // admins sincronizada no app_settings (admin panel grava; legível por todos)
+                byIp = await supaRest(`active_sessions?select=user_id,ip,last_seen,email&ip=eq.${encodeURIComponent(ip)}&user_id=neq.${uid}`, 'GET', token);
+            }
             if (Array.isArray(byIp.data)) {
-                const fresh = byIp.data.find(s => (Date.now() - Date.parse(s.last_seen)) < SESSION_WINDOW_MS && (s.role || 'user') !== 'admin');
+                let adminEmails = new Set();
+                if (!temColunaRole) {
+                    const as = await supaRest('app_settings?select=value&key=eq.admin_emails', 'GET', token);
+                    const arr = (as.data && as.data[0] && as.data[0].value) || [];
+                    adminEmails = new Set((Array.isArray(arr) ? arr : []).map(e => String(e).toLowerCase()));
+                }
+                const fresh = byIp.data.find(s => {
+                    if ((Date.now() - Date.parse(s.last_seen)) >= SESSION_WINDOW_MS) return false;
+                    if (temColunaRole) return (s.role || 'user') !== 'admin';
+                    return !adminEmails.has(String(s.email || '').toLowerCase());
+                });
                 if (fresh) {
                     return json({ ok: false, error: 'Este IP já possui outra conta conectada. Uma conta por IP.' });
                 }

@@ -37,6 +37,10 @@
             <button id="auth-gate-retry" class="enter-btn hidden" type="button">
                 <i class="fas fa-redo"></i> Tentar novamente
             </button>
+            <div class="auth-gate-links">
+                <a href="login.html?next=index.html&tab=signup"><i class="fas fa-user-plus"></i> Criar conta</a>
+                <a href="planos.html"><i class="fas fa-tags"></i> Ver planos</a>
+            </div>
         </div>
     </div>
 
@@ -95,6 +99,7 @@
                             <div id="live-categories"></div>
                         </aside>
                         <div class="live-main">
+                    <div id="live-stage" class="live-stage hidden"></div>
                             <div class="live-header">
                                 <div class="live-header-title"><span id="live-cat-current">Todos os Canais</span><span class="count-chip" id="live-count"></span></div>
                                 <div class="live-header-sub" id="live-cat-sub">Sinal ao vivo</div>
@@ -375,12 +380,12 @@
             <div class="parental-icon"><i class="fas fa-lock"></i></div>
             <div class="parental-title" id="parental-title">Controle Parental</div>
             <div class="parental-msg" id="parental-msg">Digite o PIN de 4 dígitos</div>
-            <div class="pin-digits" id="pin-digits">
+            <form class="pin-digits" id="pin-digits" autocomplete="off">
                 <input type="password" class="pin-digit" id="pin-1" maxlength="1" inputmode="numeric" autocomplete="off">
                 <input type="password" class="pin-digit" id="pin-2" maxlength="1" inputmode="numeric" autocomplete="off">
                 <input type="password" class="pin-digit" id="pin-3" maxlength="1" inputmode="numeric" autocomplete="off">
                 <input type="password" class="pin-digit" id="pin-4" maxlength="1" inputmode="numeric" autocomplete="off">
-            </div>
+            </form>
             <div class="parental-error hidden" id="parental-error"></div>
             <div class="parental-actions">
                 <button class="btn-pin primary" id="btn-pin-confirm"><i class="fas fa-check"></i> Confirmar</button>
