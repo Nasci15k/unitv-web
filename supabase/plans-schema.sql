@@ -28,8 +28,10 @@ create table if not exists public.active_sessions (
   ip text,
   user_agent text,
   device text,
+  role text not null default 'user',
   last_seen timestamptz not null default now()
 );
+alter table public.active_sessions add column if not exists role text not null default 'user';
 alter table public.active_sessions enable row level security;
 drop policy if exists "as ins own" on public.active_sessions;
 create policy "as ins own" on public.active_sessions for insert to authenticated with check (auth.uid() = user_id);

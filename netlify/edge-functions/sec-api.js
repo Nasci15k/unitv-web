@@ -93,28 +93,35 @@ export default async (request, context) => {
                     }
                 } catch (e) { /* sem VPN check se a API falhar */ }
             }
-            // 1) conta já em uso em outro IP?
+            // 1) conta já em uso em outro IP? (só 1 dispositivo por conta)
             const sess = await supaRest(`active_sessions?select=user_id,ip,last_seen&user_id=eq.${uid}`, 'GET', token);
-            const cur = (sess.data && sess.data[0]) || null;
+            const cur = (sess.data && Array.isArray(sess.data) && sess.data[0]) || null;
             if (cur && cur.ip && cur.ip !== ip) {
                 const age = Date.now() - Date.parse(cur.last_seen);
                 if (age < SESSION_WINDOW_MS) {
                     return json({ ok: false, error: 'Esta conta já está em uso em outro dispositivo. Encerre lá para entrar aqui.' });
                 }
             }
-            // 2) IP já em uso por outra conta?
-            const byIp = await supaRest(`active_sessions?select=user_id,ip,last_seen&ip=eq.${ip}&user_id=neq.${uid}`, 'GET', token);
+            // 2) IP já em uso por outra conta? (sessões de ADMIN não contam — admin pode
+            //    ter quantas contas quiser no mesmo IP, e não bloqueia outros usuários)
+            const byIp = await supaRest(`active_sessions?select=user_id,ip,last_seen,role&ip=eq.${encodeURIComponent(ip)}&user_id=neq.${uid}`, 'GET', token);
             if (Array.isArray(byIp.data)) {
-                const fresh = byIp.data.find(s => (Date.now() - Date.parse(s.last_seen)) < SESSION_WINDOW_MS);
+                const fresh = byIp.data.find(s => (Date.now() - Date.parse(s.last_seen)) < SESSION_WINDOW_MS && (s.role || 'user') !== 'admin');
                 if (fresh) {
                     return json({ ok: false, error: 'Este IP já possui outra conta conectada. Uma conta por IP.' });
                 }
             }
         }
 
-        // registra acesso + sessão
+        // registra acesso + sessão (com role, pro check acima ignorar admins)
         await supaRest('access_logs', 'POST', token, [{ user_id: uid, email, ip, user_agent: ua.substring(0, 200), device, created_at: nowIso }]);
-        await supaRest(`active_sessions?on_conflict=user_id`, 'POST', token, [{ user_id: uid, email, ip, user_agent: ua.substring(0, 200), device, last_seen: nowIso }]);
+        const sessRow = { user_id: uid, email, ip, user_agent: ua.substring(0, 200), device, last_seen: nowIso, role: p.role || 'user' };
+        let sessOk = await supaRest(`active_sessions?on_conflict=user_id`, 'POST', token, sessRow);
+        if (!sessOk.ok) {
+            // coluna role pode nao existir ainda — tenta sem
+            const { role, ...rowSemRole } = sessRow;
+            sessOk = await supaRest(`active_sessions?on_conflict=user_id`, 'POST', token, rowSemRole);
+        }
 
         // plano expirado?
         let expired = false;
