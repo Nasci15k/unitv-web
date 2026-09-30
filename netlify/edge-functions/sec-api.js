@@ -70,13 +70,29 @@ export default async (request, context) => {
     if (pathname === '/session-register' && request.method === 'POST') {
         // perfil do usuário
         const prof = await supaRest(`profiles?select=role,status,plan,plan_expires&id=eq.${uid}`, 'GET', token);
-        const p = (prof.data && prof.data[0]) || null;
-        if (!p) return json({ ok: false, error: 'Perfil não encontrado.' }, 403);
+        const schemaMissing = !prof.ok || (prof.data && !Array.isArray(prof.data));
+        if (schemaMissing) {
+            // schema de planos ainda nao instalado — modo legado: nao bloqueia nada
+            return json({ ok: true, plan: 'legacy', role: 'admin', expired: false, legacy: true, ip, device });
+        }
+        const p = (Array.isArray(prof.data) && prof.data[0]) || null;
+        if (!p) return json({ ok: true, plan: 'legacy', role: 'admin', expired: false, legacy: true, ip, device });
         if (p.role !== 'admin' && p.status !== 'approved') {
             return json({ ok: false, error: 'Conta não aprovada.', status: p.status });
         }
 
         if (p.role !== 'admin') {
+            // VPN/Proxy (opcional): configure VPN_API_KEY no Netlify com chave gratuita de iphub.info
+            const vpnKey = Deno.env.get('VPN_API_KEY') || '';
+            if (vpnKey) {
+                try {
+                    const vr = await fetch(`http://v2.api.iphub.info/ip/${encodeURIComponent(ip)}`, { headers: { 'X-Key': vpnKey }, signal: AbortSignal.timeout(6000) });
+                    const vj = await vr.json().catch(() => null);
+                    if (vj && vj.block === 1) {
+                        return json({ ok: false, error: 'Acesso via VPN/Proxy não é permitido. Desative a VPN e tente novamente.' });
+                    }
+                } catch (e) { /* sem VPN check se a API falhar */ }
+            }
             // 1) conta já em uso em outro IP?
             const sess = await supaRest(`active_sessions?select=user_id,ip,last_seen&user_id=eq.${uid}`, 'GET', token);
             const cur = (sess.data && sess.data[0]) || null;

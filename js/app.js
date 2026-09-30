@@ -527,6 +527,8 @@
                 showGate(j.error || 'Acesso bloqueado.', true, '<i class="fas fa-sign-in-alt"></i> Entrar');
                 return true;
             }
+            // schema de planos ainda nao instalado — deixa tudo como antes
+            if (j.legacy) return false;
             window.PlanStore = { plan: j.plan, expires: j.expires, role: j.role };
             // plano expirado → tela de planos
             if (j.expired) { location.href = 'planos.html'; return true; }

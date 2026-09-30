@@ -141,8 +141,7 @@
             async function getToken() {
                 await AuthStore.init();
                 if (!AuthStore.isAuthenticated()) { location.href = 'login.html?next=planos.html'; return ''; }
-                const client = await (AuthStore._getClient ? AuthStore._getClient() : null);
-                return client ? client.auth.getSession().then(r => r.data.session.access_token) : '';
+                return AuthStore.getAccessToken();
             }
 
             grid.querySelectorAll('.btn-plan').forEach(b => b.addEventListener('click', () => {
@@ -172,7 +171,12 @@
                 try {
                     const res = await fetch('/session-register', { method: 'POST', headers: { Authorization: 'Bearer ' + tk } });
                     const j = await res.json();
-                    if (j.ok) {
+                    if (j.ok && j.legacy) {
+                        document.getElementById('trial-banner').classList.remove('hidden');
+                        document.getElementById('trial-title').textContent = 'Acesso liberado';
+                        document.getElementById('trial-banner').querySelector('.trial-desc').textContent = 'Sistema de planos em ativação — no momento o acesso está liberado.';
+                        document.getElementById('trial-countdown').textContent = 'OK';
+                    } else if (j.ok) {
                         if (j.plan === 'trial' && !j.expired) {
                             document.getElementById('trial-banner').classList.remove('hidden');
                             startCountdown(j.expires);
