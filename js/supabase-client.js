@@ -222,10 +222,24 @@
   function resetPassword(email) {
     return init().then(function () {
       if (demoMode) throw new Error('Modo demo: recuperação de senha indisponível.');
-      return client.auth.resetPasswordForEmail(email, {
-        redirectTo: location.origin + '/login.html?next=' + encodeURIComponent(nextParam())
-      }).then(function () { return true; })
-        .catch(function (err) { throw new Error(ptError(err)); });
+      // fetch direto: supabase-js não propaga o 400 do /recover
+      var redirectTo = location.origin + '/login.html?next=' + encodeURIComponent(nextParam());
+      return fetch(SUP_URL + '/auth/v1/recover', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUP_KEY },
+        body: JSON.stringify({ email: email, data: { redirect_to: redirectTo } })
+      }).then(function (res) {
+        return res.json().catch(function () { return {}; }).then(function (body) {
+          if (!res.ok) {
+            var m = body && (body.msg || body.message || body.error_description);
+            if (body && body.error_code === 'email_address_invalid') {
+              m = 'Este e-mail não pode receber mensagens do Supabase. Use outro e-mail de acesso ou contate o admin.';
+            }
+            throw new Error(m || 'Não foi possível enviar o link de redefinição.');
+          }
+          return true;
+        });
+      });
     });
   }
   function nextParam() {
