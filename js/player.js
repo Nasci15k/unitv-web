@@ -433,9 +433,7 @@ class VideoPlayer {
                 autoCleanupSourceBuffer: true,
                 autoCleanupMaxBackwardDuration: 30,
                 autoCleanupMinBackwardDuration: 10,
-                liveBufferLatencyChasing: this.isLive,
-                liveBufferLatencyMaxLatency: this.isLive ? 15 : 0,
-                liveBufferLatencyMinRemain: this.isLive ? 8 : 0
+                liveBufferLatencyChasing: false
             });
 
             if (this.isLive) this._lastLiveEngine = 'mpegts';
@@ -455,7 +453,12 @@ class VideoPlayer {
                     if (b.length) ahead = Math.max(0, b.end(b.length - 1) - this.videoEl.currentTime);
                 } catch (e) {}
                 const minWait = (this._liveBackoff || 2) * 1000;
-                const wait = Math.max(minWait, Math.min((ahead - 2.5) * 1000, 12000));
+                // Buffer apertado (<=6s): volta ja — esperar backoff com pouco buffer = tela travada.
+                // Com folga: espera porem o backoff e limitado a 4s (provedor corta conexoes em
+                // segundos de forma normal; piso longo = underrun garantido).
+                let wait;
+                if (ahead <= 6) wait = 300;
+                else wait = Math.max(Math.min(minWait, 4000), Math.min((ahead - 3) * 1000, 12000));
                 _plog('[LIVE] Conexao durou ' + dur.toFixed(0) + 's (buffer: ' + ahead.toFixed(1) + 's) — reconexao em ' + Math.round(wait / 1000) + 's' + (minWait > 2000 ? ' (backoff)' : '') + ')');
                 clearTimeout(this._reconnectTimer);
                 this._reconnectTimer = setTimeout(() => this._restartLive(), wait);
@@ -525,25 +528,50 @@ class VideoPlayer {
 
         this.hls = new Hls({
             enableWorker: true,
-            lowLatencyMode: this.isLive,
-            maxBufferLength: this.isLive ? 10 : 30,
-            maxMaxBufferLength: this.isLive ? 30 : 120,
+            lowLatencyMode: false,
+            maxBufferLength: this.isLive ? 26 : 30,
+            maxMaxBufferLength: this.isLive ? 60 : 120,
             backBufferLength: 30,
             startFragPrefetch: true,
-            maxBufferHole: 0.5,
+            maxBufferHole: 0.8,
             highBufferWatchdogPeriod: 2,
             nudgeOffset: 0.2,
             nudgeMaxRetry: 5,
             maxFragLookUpTolerance: 0.25,
             abrEwmaDefaultEstimate: 500000,
             testBandwidth: false,
-            progressive: true
+            progressive: true,
+            manifestLoadPolicy: {
+                default: {
+                    maxTimeToFirstByteMs: 8000,
+                    maxLoadTimeMs: 15000,
+                    timeoutRetry: { maxNumRetry: 3, retryDelayMs: 500, maxRetryDelayMs: 4000 },
+                    errorRetry: { maxNumRetry: 3, retryDelayMs: 800, maxRetryDelayMs: 5000 }
+                }
+            },
+            playlistLoadPolicy: {
+                default: {
+                    maxTimeToFirstByteMs: 8000,
+                    maxLoadTimeMs: 15000,
+                    timeoutRetry: { maxNumRetry: 3, retryDelayMs: 500, maxRetryDelayMs: 4000 },
+                    errorRetry: { maxNumRetry: 3, retryDelayMs: 800, maxRetryDelayMs: 5000 }
+                }
+            },
+            fragLoadPolicy: {
+                default: {
+                    maxTimeToFirstByteMs: 8000,
+                    maxLoadTimeMs: 60000,
+                    timeoutRetry: { maxNumRetry: 5, retryDelayMs: 500, maxRetryDelayMs: 4000 },
+                    errorRetry: { maxNumRetry: 8, retryDelayMs: 800, maxRetryDelayMs: 8000 }
+                }
+            }
         });
 
         this.hls.loadSource(url);
         this.hls.attachMedia(this.videoEl);
 
         this.hls.on(Hls.Events.MANIFEST_PARSED, () => {
+            this.retryCount = 0;
             this.loader.classList.add('hidden');
             this.smartPlay();
             this.populateHLSSubtitles();
@@ -569,9 +597,19 @@ class VideoPlayer {
             if (data.fatal) {
                 switch (data.type) {
                     case Hls.ErrorTypes.NETWORK_ERROR:
-                        // .m3u8 que na verdade e TS cru: retry nao tem sentido, vai direto pro mpegts
+                        // .m3u8 que na verdade e TS cru OU corpo invalido pontual do provedor:
+                        // em vez de cair direto pro mpegts, tenta de novo via startLoad (rede recuperavel)
                         if (data.details === 'levelParsingError') {
-                            _plog('[HLS] Manifest invalido (TS cru?) — caindo pro mpegts');
+                            if (this.retryCount < this.maxRetries) {
+                                this.retryCount++;
+                                _plog('[HLS] Manifest invalido (corpo upstream) — retry ' + this.retryCount + '/' + this.maxRetries);
+                                const delay = 800 * this.retryCount;
+                                setTimeout(() => {
+                                    try { if (this.hls) this.hls.startLoad(); } catch (e) {}
+                                }, delay);
+                                return;
+                            }
+                            _plog('[HLS] Manifest invalido apos retries — caindo pro mpegts');
                             this.hls.destroy(); this.hls = null;
                             this._hlsToFallback(url);
                             return;
@@ -1206,8 +1244,14 @@ class VideoPlayer {
     _restartLive() {
         if (!this.isLive || !this.currentUrl) return;
         const now = Date.now();
-        // anti-loop: se a ultima reconexao foi ha menos de 4s, nao martela
-        if (this._lastRestartAt && now - this._lastRestartAt < 4000) return;
+        // anti-loop: se a ultima reconexao foi ha menos de 4s, nao martela —
+        // mas REAGENDA em vez de descartar (descartar = stream morto pra sempre)
+        if (this._lastRestartAt && now - this._lastRestartAt < 4000) {
+            clearTimeout(this._reconnectTimer);
+            const delay = 4000 - (now - this._lastRestartAt) + 100;
+            this._reconnectTimer = setTimeout(() => this._restartLive(), delay);
+            return;
+        }
         this._lastRestartAt = now;
         this._stallLastTime = 0;
         this._stallStrikes = 0;

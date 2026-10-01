@@ -61,12 +61,13 @@ export default async (request, context) => {
 
     let upstream;
     const probablyImage = /\.(jpe?g|png|webp|svg|gif|ico)(\?|$)/i.test(parsed.pathname);
+    const probablyPlaylist = /\.m3u8(\?|$)/i.test(parsed.pathname);
     try {
         upstream = await fetch(parsed.href, {
             method: request.method === 'HEAD' ? 'HEAD' : 'GET',
             headers: fwd,
             redirect: 'follow',
-            signal: probablyImage ? AbortSignal.timeout(10000) : undefined
+            signal: probablyImage ? AbortSignal.timeout(10000) : (probablyPlaylist ? AbortSignal.timeout(12000) : undefined)
         });
     } catch {
         if (probablyImage) return imagePlaceholder();
@@ -98,7 +99,22 @@ export default async (request, context) => {
 
     if (isPlaylist && request.method !== 'HEAD') {
         resHeaders.delete('content-length');
-        const text = await upstream.text();
+        let text;
+        try {
+            text = await Promise.race([
+                upstream.text(),
+                new Promise((_, rej) => setTimeout(() => rej(new Error('playlist read timeout')), 12000))
+            ]);
+        } catch {
+            try { if (upstream.body) await upstream.body.cancel(); } catch { /* descarta */ }
+            return new Response('Bad Gateway', { status: 502, headers: { 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' } });
+        }
+        // Provedor as vezes devolve 200 com corpo invalido (lixo/HTML/vazio) em reload de manifesto.
+        // Repassar isso quebra o hls.js com levelParsingError (fatal, sem retry de rede).
+        // 502 vira erro de rede recuperavel: o player tenta startLoad() antes de trocar de engine.
+        if (upstream.ok && !/^\uFEFF?\s*#EXTM3U/i.test(text)) {
+            return new Response('Bad Gateway', { status: 502, headers: { 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' } });
+        }
         const proxyBase = url.origin + '/xtream-stream';
         const rewritten = rewritePlaylist(text, proxyBase, finalUrl);
         return new Response(rewritten, {

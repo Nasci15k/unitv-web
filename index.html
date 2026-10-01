@@ -11,8 +11,20 @@
     <meta name="theme-color" content="#e50914">
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="preconnect" href="https://cdn.jsdelivr.net">
-    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <script>
+        // Silencia logs internos das libs de player (mpegts.js/hls.js) durante playback.
+        // Para depurar, habilite no console: window.OPENTV_DEBUG = true
+        (function () {
+            ['log', 'info', 'debug', 'warn', 'error'].forEach(function (m) {
+                var orig = console[m];
+                if (typeof orig !== 'function') return;
+                console[m] = function () {
+                    if (window.OPENTV_DEBUG === true) orig.apply(console, arguments);
+                };
+            });
+        })();
+    </script>
+    <script src="lib/hls.min.js"></script>
     <script src="lib/mpegts.js"></script>
     <script src="lib/mp4box.all.js"></script>
 </head>
