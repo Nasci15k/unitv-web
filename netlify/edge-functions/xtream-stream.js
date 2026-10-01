@@ -18,7 +18,13 @@ function rewritePlaylist(text, proxyBase, baseUrl) {
         try {
             const abs = new URL(t, baseUrl);
             if (!/^https?:$/i.test(abs.protocol)) return line;
-            return proxyBase + '/__f/' + encodeURIComponent(abs.href);
+            // Query (token) como query REAL, nao encoded no path: o hls.js compara o path
+            // dos segmentos entre reloads ignorando query — token dentro do path causava
+            // "media sequence mismatch" fatal em toda recarga do manifesto.
+            const qi = abs.href.indexOf('?');
+            const pathPart = qi >= 0 ? abs.href.slice(0, qi) : abs.href;
+            const query = qi >= 0 ? abs.href.slice(qi) : '';
+            return proxyBase + '/__f/' + encodeURIComponent(pathPart) + query;
         } catch {
             return line;
         }
@@ -34,6 +40,11 @@ export default async (request, context) => {
     if (splat.startsWith('/__f/')) {
         try {
             target = decodeURIComponent(splat.slice(5));
+            if (target.includes('?')) {
+                if (url.search) target += '&' + url.search.slice(1);
+            } else {
+                target += url.search;
+            }
             extraSearch = '';
         } catch {
             return new Response('Bad Request', { status: 400 });
