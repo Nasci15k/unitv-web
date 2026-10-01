@@ -12,6 +12,17 @@
   path = "/xtream-stream/*"
   function = "xtream-stream"
 
+# Multi-fornecedor: rotas NOVAS por provedor (/xapi/{pid}, /xstr/{pid}).
+# Sem redirect de fallback de proposito: falha da rota nova afeta APENAS
+# provedores novos; o padrao segue no /xtream-api legado.
+[[edge_functions]]
+  path = "/xapi/*"
+  function = "xapi"
+
+[[edge_functions]]
+  path = "/xstr/*"
+  function = "xstr"
+
 [[edge_functions]]
   path = "/status-all"
   function = "status-api"
