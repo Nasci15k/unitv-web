@@ -13,3 +13,12 @@ cd
 node
 npm
 unitv-web@1.0.0
+
+test-*.js
+analyze-*.js
+local-*.js
+verify-*.js
+core-*.js
+enrich-*.txt
+create-tables.js
+diag-offline.js
