@@ -1,3 +1,5 @@
+window._perr = window._perr || function () { if (window.OPENTV_DEBUG) console.error.apply(console, arguments); };
+
 class XtreamAPI {
     constructor() {
         this.serverUrl = 'https://telefunplay.xyz';
@@ -120,7 +122,7 @@ class XtreamAPI {
                     await new Promise(r => setTimeout(r, 800));
                     return this.fetch(url, retries - 1);
                 }
-                if (!corsLike) console.error('API Error:', err);
+                if (!corsLike) _perr('API Error:', err);
                 throw err;
             } finally {
                 this._pending.delete(url);
@@ -177,7 +179,7 @@ class XtreamAPI {
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             return await res.text();
         } catch (err) {
-            console.error('XMLTV Error:', err);
+            _perr('XMLTV Error:', err);
             throw err;
         }
     }

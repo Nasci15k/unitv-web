@@ -49,6 +49,25 @@ export default async (request, context) => {
         return json({ ok: true });
     }
 
+    // Sonda de um canal (server-side): SEMPRE responde 200 para o browser nao
+    // gerar "Failed to load resource" no console quando o provedor devolve 403/404.
+    if (pathname === '/status-one') {
+        const p = new URL(request.url).searchParams.get('p') || '';
+        if (!/^\/live\/[^\/]+\/[^\/]+\/\d+\.ts$/.test(p)) return json({ st: 'warning' });
+        let st = 'warning';
+        try {
+            const res = await fetch('https://telefunplay.xyz' + p, {
+                headers: { Range: 'bytes=0-1', 'User-Agent': request.headers.get('User-Agent') || 'Mozilla/5.0' },
+                redirect: 'follow',
+                signal: AbortSignal.timeout(5000)
+            });
+            if (res.body) { try { await res.body.cancel(); } catch (e) { /* nao interessa */ } }
+            if (res.status === 404) st = 'offline';
+            else if (res.ok || res.status === 206) st = 'online';
+        } catch (e) { st = 'warning'; }
+        return json({ st }, 200, 'public, max-age=60');
+    }
+
     if (pathname === '/status-all') {
         let rows = null;
         try { rows = await selectAll('channel_status', 'stream_id,status,checked_at'); }

@@ -17,6 +17,10 @@
   function = "status-api"
 
 [[edge_functions]]
+  path = "/status-one"
+  function = "status-api"
+
+[[edge_functions]]
   path = "/status-report"
   function = "status-api"
 

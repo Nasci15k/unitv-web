@@ -54,7 +54,7 @@
   </div>
   <div id="msg" class="msg err" role="alert"></div>
   <form id="form-signin" novalidate>
-    <div class="field"><label for="si-email">E-mail</label><input id="si-email" type="email" required autocomplete="email" placeholder="voce@email.com"></div>
+    <div class="field"><label for="si-email">E-mail</label><input id="si-email" type="email" required autocomplete="username" placeholder="voce@email.com"></div>
     <div class="field"><label for="si-pass">Senha</label><input id="si-pass" type="password" required autocomplete="current-password" placeholder="••••••••"></div>
     <button class="btn" type="submit" id="btn-signin">Entrar</button>
     <button type="button" id="link-forgot" style="background:none;border:none;color:var(--text3);font-size:12px;cursor:pointer;font-family:var(--font);text-align:right;margin-top:-4px">Esqueci minha senha</button>
@@ -65,13 +65,14 @@
     <button type="button" id="link-back-signin" style="background:none;border:none;color:var(--text3);font-size:12px;cursor:pointer;font-family:var(--font);text-align:center">← Voltar ao login</button>
   </form>
   <form id="form-newpass" class="hidden" novalidate>
+    <input type="text" name="username" autocomplete="username" tabindex="-1" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0">
     <div class="field"><label for="np-pass">Nova senha (mín. 6)</label><input id="np-pass" type="password" required minlength="6" autocomplete="new-password" placeholder="••••••••"></div>
     <div class="field"><label for="np-pass2">Confirmar nova senha</label><input id="np-pass2" type="password" required minlength="6" autocomplete="new-password" placeholder="••••••••"></div>
     <button class="btn" type="submit" id="btn-newpass">Salvar nova senha</button>
   </form>
   <form id="form-signup" class="hidden" novalidate>
     <div class="field"><label for="su-name">Nome</label><input id="su-name" type="text" autocomplete="name" placeholder="Seu nome"></div>
-    <div class="field"><label for="su-email">E-mail</label><input id="su-email" type="email" required autocomplete="email" placeholder="voce@email.com"></div>
+    <div class="field"><label for="su-email">E-mail</label><input id="su-email" type="email" required autocomplete="username" placeholder="voce@email.com"></div>
     <div class="field"><label for="su-pass">Senha (mín. 6)</label><input id="su-pass" type="password" required minlength="6" autocomplete="new-password" placeholder="••••••••"></div>
     <div class="field"><label for="su-pass2">Confirmar senha</label><input id="su-pass2" type="password" required minlength="6" autocomplete="new-password" placeholder="••••••••"></div>
     <button class="btn" type="submit" id="btn-signup">Criar conta</button>

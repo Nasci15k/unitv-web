@@ -1,4 +1,6 @@
-﻿document.addEventListener('DOMContentLoaded', () => {
+﻿window._perr = window._perr || function () { if (window.OPENTV_DEBUG) console.error.apply(console, arguments); };
+
+document.addEventListener('DOMContentLoaded', () => {
     const $ = (id) => document.getElementById(id);
     const appEl = $('app');
     const authGate = $('auth-gate');
@@ -462,7 +464,7 @@
                 }
             }
         } catch (err) {
-            console.error(err);
+            _perr(err);
             showToast('Erro: ' + err.message, 'error');
             entered = false;
             appEl.style.display = 'none';
@@ -1601,34 +1603,20 @@
     }
 
     async function probeStream(streamId) {
+        if (state.serverStatus.size > 100) {
+            const srv = state.serverStatus.get(String(streamId));
+            if (srv) return srv;
+        }
         try {
-            const url = api.getStreamUrl('live', streamId);
+            const u = new URL(api.getStreamUrl('live', streamId), location.href);
+            const p = u.pathname.replace(/^\/xtream-stream/, '') + u.search;
             const ctrl = new AbortController();
-            const timer = setTimeout(() => ctrl.abort(), 4000);
-            const res = await fetch(url, {
-                method: 'GET',
-                headers: { Range: 'bytes=0-1' },
-                signal: ctrl.signal
-            });
+            const timer = setTimeout(() => ctrl.abort(), 6000);
+            // Sondagem server-side: o edge responde sempre 200 (console do usuario fica limpo)
+            const res = await fetch('/status-one?p=' + encodeURIComponent(p), { signal: ctrl.signal });
             clearTimeout(timer);
-            if (res.status === 404) return 'offline';
-            if (!res.ok && res.status !== 206) return 'warning';
-            const ct = (res.headers.get('content-type') || '').toLowerCase();
-            if (ct.includes('mpegurl') || ct.includes('text') || ct.includes('application/vnd.apple')) {
-                const reader = res.body ? res.body.getReader() : null;
-                if (reader) {
-                    const { value } = await reader.read();
-                    try { reader.cancel(); } catch (e) {}
-                    const text = value ? new TextDecoder().decode(value) : '';
-                    if (text.includes('EXT-X-ERROR')) return 'offline';
-                    if (text.includes('#EXTM3U')) return 'online';
-                    return 'online';
-                }
-            }
-            if (res.body) {
-                try { await res.body.cancel(); } catch (e) {}
-            }
-            return 'online';
+            const j = await res.json();
+            return (j && j.st) ? j.st : 'warning';
         } catch (e) {
             return 'warning';
         }

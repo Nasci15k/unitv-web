@@ -1,3 +1,7 @@
+window._plog = window._plog || function () { if (window.OPENTV_DEBUG) console.log.apply(console, arguments); };
+window._pwarn = window._pwarn || function () { if (window.OPENTV_DEBUG) console.warn.apply(console, arguments); };
+window._perr = window._perr || function () { if (window.OPENTV_DEBUG) console.error.apply(console, arguments); };
+
 class VideoPlayer {
     constructor() {
         this.hls = null;
@@ -92,7 +96,7 @@ class VideoPlayer {
             this._stallStrikes++;
             if (this._stallStrikes >= 3) {
                 this._stallStrikes = 0;
-                console.log('[LIVE] Stall detectado — reconectando stream');
+                _plog('[LIVE] Stall detectado — reconectando stream');
                 this._restartLive();
             }
         }, 3000);
@@ -411,7 +415,7 @@ class VideoPlayer {
 
     playMpegts(url) {
         this.loader.classList.remove('hidden');
-        console.log('[MPEGTS] Starting live stream');
+        _plog('[MPEGTS] Starting live stream');
         try {
             this.destroyMpegts();
 
@@ -452,7 +456,7 @@ class VideoPlayer {
                 } catch (e) {}
                 const minWait = (this._liveBackoff || 2) * 1000;
                 const wait = Math.max(minWait, Math.min((ahead - 2.5) * 1000, 12000));
-                console.log('[LIVE] Conexao durou ' + dur.toFixed(0) + 's (buffer: ' + ahead.toFixed(1) + 's) — reconexao em ' + Math.round(wait / 1000) + 's' + (minWait > 2000 ? ' (backoff)' : '') + ')');
+                _plog('[LIVE] Conexao durou ' + dur.toFixed(0) + 's (buffer: ' + ahead.toFixed(1) + 's) — reconexao em ' + Math.round(wait / 1000) + 's' + (minWait > 2000 ? ' (backoff)' : '') + ')');
                 clearTimeout(this._reconnectTimer);
                 this._reconnectTimer = setTimeout(() => this._restartLive(), wait);
             });
@@ -476,7 +480,7 @@ class VideoPlayer {
             }, 8000);
 
             this.mpegtsPlayer.on(mpegts.Events.ERROR, (errType, errDetail, errInfo) => {
-                console.warn('[MPEGTS]', errType, errDetail);
+                _pwarn('[MPEGTS]', errType, errDetail);
                 const msg = JSON.stringify(errInfo || {});
                 const hevcUnsupported = /hvc1|hev1|MediaMSEError|addSourceBuffer/i.test(msg + errDetail) &&
                     !this._mpegtsHevcNotified;
@@ -492,7 +496,7 @@ class VideoPlayer {
                     return;
                 }
                 if (errType === mpegts.ErrorTypes.NETWORK_ERROR || errType === mpegts.ErrorTypes.MEDIA_ERROR) {
-                    console.log('[MPEGTS] Error, trying fallback playback');
+                    _plog('[MPEGTS] Error, trying fallback playback');
                     this.destroyMpegts();
                     if (this.isLive && !this._cameFromHls) {
                         this.playHLS(this.toHlsUrl(url));
@@ -503,11 +507,11 @@ class VideoPlayer {
             });
 
         } catch (e) {
-            console.warn('[MPEGTS] Failed:', e.message);
+            _pwarn('[MPEGTS] Failed:', e.message);
             if (this._inMkvFallback) {
                 this.showMkvError();
             } else {
-                console.log('[MPEGTS] Trying direct fallback');
+                _plog('[MPEGTS] Trying direct fallback');
                 if (this.isLive) this.playHLS(this.toHlsUrl(url));
                 else this.playDirect(url);
             }
@@ -561,20 +565,20 @@ class VideoPlayer {
         });
 
         this.hls.on(Hls.Events.ERROR, (_, data) => {
-            console.warn('[HLS]', data.type, data.details, data.fatal);
+            _pwarn('[HLS]', data.type, data.details, data.fatal);
             if (data.fatal) {
                 switch (data.type) {
                     case Hls.ErrorTypes.NETWORK_ERROR:
                         // .m3u8 que na verdade e TS cru: retry nao tem sentido, vai direto pro mpegts
                         if (data.details === 'levelParsingError') {
-                            console.log('[HLS] Manifest invalido (TS cru?) — caindo pro mpegts');
+                            _plog('[HLS] Manifest invalido (TS cru?) — caindo pro mpegts');
                             this.hls.destroy(); this.hls = null;
                             this._hlsToFallback(url);
                             return;
                         }
                         // 404/403 no manifest: canal sem variante HLS (ou offline) — sem retry
                         if (data.details === 'manifestLoadError' && data.response && (data.response.code === 404 || data.response.code === 403)) {
-                            console.log('[HLS] Manifest 404 — canal sem HLS, indo pro mpegts');
+                            _plog('[HLS] Manifest 404 — canal sem HLS, indo pro mpegts');
                             this.hls.destroy(); this.hls = null;
                             this._hlsToFallback(url);
                             return;
@@ -585,7 +589,7 @@ class VideoPlayer {
                                 try { this.hls.startLoad(); } catch(e) {}
                             }, 1000 * this.retryCount);
                         } else {
-                            console.log('[HLS] Network errors exhausted, trying fallback');
+                            _plog('[HLS] Network errors exhausted, trying fallback');
                             this.hls.destroy(); this.hls = null;
                             this._hlsToFallback(url);
                         }
@@ -594,7 +598,7 @@ class VideoPlayer {
                         if (data.details === 'bufferAddCodecError') {
                             const codecInfo = (data.error && data.error.codec) || '';
                             const hevc = /hvc|hev/i.test(codecInfo) || /hvc|hev/i.test(JSON.stringify(data));
-                            console.log('[HLS] Codec not supported by MSE:', codecInfo || 'unknown');
+                            _plog('[HLS] Codec not supported by MSE:', codecInfo || 'unknown');
                             this.hls.destroy(); this.hls = null;
                             if (hevc) {
                                 this.showErrorMessage('Canal em HEVC (H.265). Procurando versão compatível...');
@@ -607,18 +611,18 @@ class VideoPlayer {
                         if (this.mediaRecoverCount < 2) {
                             this.mediaRecoverCount++;
                             try { this.hls.recoverMediaError(); } catch (e) {
-                                console.log('[HLS] Recovery failed, trying fallback');
+                                _plog('[HLS] Recovery failed, trying fallback');
                                 this.hls.destroy(); this.hls = null;
                                 this._hlsToFallback(url);
                             }
                         } else {
-                            console.log('[HLS] Media errors exhausted, trying fallback');
+                            _plog('[HLS] Media errors exhausted, trying fallback');
                             this.hls.destroy(); this.hls = null;
                             this._hlsToFallback(url);
                         }
                         break;
                     default:
-                        console.log('[HLS] Fatal error, trying fallback');
+                        _plog('[HLS] Fatal error, trying fallback');
                         this.hls.destroy(); this.hls = null;
                         this._hlsToFallback(url);
                         break;
@@ -651,21 +655,21 @@ class VideoPlayer {
             const mkv = (buf[0] === 0x1A && buf[1] === 0x45 && buf[2] === 0xDF && buf[3] === 0xA3) || ctype.includes('matroska') || ctype.includes('mkv');
             const ts = buf[0] === 0x47 || ctype.includes('mp2t') || ctype.includes('mpegts');
             const mp4 = (buf.length >= 8 && buf[4] === 0x66 && buf[5] === 0x74) || ctype.includes('mp4');
-            console.log('[PROBE]', { status: res.status, ctype, acao, mkv, ts, mp4 });
+            _plog('[PROBE]', { status: res.status, ctype, acao, mkv, ts, mp4 });
             if (mkv) return 'mkv';
             if (ts) return 'ts';
             if (mp4) return 'mp4';
             if (acao) return 'unknown-cors';
             return 'unknown-nocors';
         } catch (e) {
-            console.warn('[PROBE] failed:', e.message);
+            _pwarn('[PROBE] failed:', e.message);
             return 'unknown';
         }
     }
 
     async playVideo(url) {
         this.loader.classList.remove('hidden');
-        console.log('[VIDEO] VOD:', url.substring(0, 100));
+        _plog('[VIDEO] VOD:', url.substring(0, 100));
 
         if (this.mseFallbackTimer) { clearTimeout(this.mseFallbackTimer); this.mseFallbackTimer = null; }
         if (this.mseAbortController) { this.mseAbortController.abort(); this.mseAbortController = null; }
@@ -696,7 +700,7 @@ class VideoPlayer {
 
         this.mseFallbackTimer = setTimeout(() => {
             if (!resolved && this.videoEl.readyState < 2) {
-                console.log('[VIDEO] Native stuck rs=' + this.videoEl.readyState + ', aborting...');
+                _plog('[VIDEO] Native stuck rs=' + this.videoEl.readyState + ', aborting...');
                 this.videoEl.onloadeddata = null;
                 this.videoEl.oncanplay = null;
                 this.videoEl.onloadedmetadata = null;
@@ -711,7 +715,7 @@ class VideoPlayer {
             if (resolved) return;
             if (this.mseFallbackTimer) { clearTimeout(this.mseFallbackTimer); this.mseFallbackTimer = null; }
             const err = this.videoEl.error;
-            console.warn('[VIDEO] Error:', err?.code, err?.message);
+            _pwarn('[VIDEO] Error:', err?.code, err?.message);
             this.videoEl.onerror = null;
             this.videoEl.removeAttribute('src');
             this.videoEl.load();
@@ -724,7 +728,7 @@ class VideoPlayer {
         let fmt = this._vodProbe;
         if (!fmt) fmt = await this.probeVodFormat(url);
         if (this.currentUrl !== url) return;
-        console.log('[VIDEO] recover fmt=', fmt);
+        _plog('[VIDEO] recover fmt=', fmt);
 
         if (fmt === 'mp4' || fmt === 'unknown-cors') {
             this.playVideoMSE(url);
@@ -732,10 +736,10 @@ class VideoPlayer {
         }
 
         const mpegtsOk = typeof mpegts !== 'undefined' && mpegts.isSupported();
-        console.log('[VIDEO] recover mpegtsOk=', mpegtsOk, 'tried=', this._vodMpegtsTried);
+        _plog('[VIDEO] recover mpegtsOk=', mpegtsOk, 'tried=', this._vodMpegtsTried);
         if ((fmt === 'ts' || fmt === 'unknown' || fmt === 'unknown-nocors' || fmt === 'unknown-cors') && mpegtsOk && !this._vodMpegtsTried) {
             this._vodMpegtsTried = true;
-            console.log('[VIDEO] Trying mpegts for', fmt);
+            _plog('[VIDEO] Trying mpegts for', fmt);
             this.playMpegts(url);
             const tsTimer = setTimeout(() => {
                 if (this.videoEl && this.videoEl.readyState < 2 && this.currentUrl === url) {
@@ -764,10 +768,10 @@ class VideoPlayer {
         if (this.mseAbortController) { this.mseAbortController.abort(); this.mseAbortController = null; }
         if (this._mseEvictionTimer) { clearInterval(this._mseEvictionTimer); this._mseEvictionTimer = null; }
         this.loader.classList.remove('hidden');
-        console.log('[MSE] Starting MP4 playback via MSE:', url.substring(0, 100));
+        _plog('[MSE] Starting MP4 playback via MSE:', url.substring(0, 100));
 
         if (!window.MediaSource || !window.MP4Box) {
-            console.warn('[MSE] MediaSource or MP4Box not available, falling back');
+            _pwarn('[MSE] MediaSource or MP4Box not available, falling back');
             this.playDirect(url);
             return;
         }
@@ -817,11 +821,11 @@ class VideoPlayer {
                         const keepBehind = aggressive ? 0 : Math.min(10, totalBuf * 0.3);
                         const removeEnd = ct - keepBehind;
                         sb.remove(start, Math.max(removeEnd, start + 1));
-                        console.log('[MSE] Evicted:', start.toFixed(1), '-', removeEnd.toFixed(1), '(total:', totalBuf.toFixed(1), 's)');
+                        _plog('[MSE] Evicted:', start.toFixed(1), '-', removeEnd.toFixed(1), '(total:', totalBuf.toFixed(1), 's)');
                         return true;
                     }
                 }
-            } catch(e) { console.warn('[MSE] Evict error:', e.message); }
+            } catch(e) { _pwarn('[MSE] Evict error:', e.message); }
             return false;
         };
 
@@ -837,17 +841,17 @@ class VideoPlayer {
                 videoAppending = true;
                 videoSB.appendBuffer(videoInitSegment);
                 videoInitAppended = true;
-                console.log('[MSE] Video init appended');
+                _plog('[MSE] Video init appended');
                 return;
             }
             videoAppending = true;
             const seg = videoSegQueue.shift();
             try { videoSB.appendBuffer(seg); }
             catch(e) {
-                console.error('[MSE] Video append error:', e.message);
+                _perr('[MSE] Video append error:', e.message);
                 videoAppending = false;
                 if (e.name === 'QuotaExceededError') {
-                    console.warn('[MSE] Video buffer full, evicting...');
+                    _pwarn('[MSE] Video buffer full, evicting...');
                     pendingEviction = true;
                     if (!videoSB.updating && !evicting) forceEvictAll();
                 }
@@ -860,17 +864,17 @@ class VideoPlayer {
                 audioAppending = true;
                 audioSB.appendBuffer(audioInitSegment);
                 audioInitAppended = true;
-                console.log('[MSE] Audio init appended');
+                _plog('[MSE] Audio init appended');
                 return;
             }
             audioAppending = true;
             const seg = audioSegQueue.shift();
             try { audioSB.appendBuffer(seg); }
             catch(e) {
-                console.error('[MSE] Audio append error:', e.message);
+                _perr('[MSE] Audio append error:', e.message);
                 audioAppending = false;
                 if (e.name === 'QuotaExceededError') {
-                    console.warn('[MSE] Audio buffer full, evicting...');
+                    _pwarn('[MSE] Audio buffer full, evicting...');
                     pendingEviction = true;
                     if (!audioSB.updating && !evicting) forceEvictAll();
                 }
@@ -883,12 +887,12 @@ class VideoPlayer {
             mp4boxFile.onReady = (info) => {
                 ready = true;
                 if (this._mseWatchdog) { clearInterval(this._mseWatchdog); this._mseWatchdog = null; }
-                console.log('[MSE] MP4Box ready:', JSON.stringify(info).substring(0, 500));
+                _plog('[MSE] MP4Box ready:', JSON.stringify(info).substring(0, 500));
                 const vt = info.videoTracks && info.videoTracks.length > 0 ? info.videoTracks[0] : null;
                 const at = info.audioTracks && info.audioTracks.length > 0 ? info.audioTracks[0] : null;
 
                 if (!vt) {
-                    console.error('[MSE] No video track found');
+                    _perr('[MSE] No video track found');
                     this.showErrorMessage('Nenhuma faixa de video encontrada.');
                     cleanup();
                     return;
@@ -898,10 +902,10 @@ class VideoPlayer {
 
                 let vc = vt.codec || (vt.info && vt.info.codec) || 'avc1.64001f';
                 const videoMime = 'video/mp4; codecs="' + vc + '"';
-                console.log('[MSE] Video MIME:', videoMime);
+                _plog('[MSE] Video MIME:', videoMime);
 
                 if (!MediaSource.isTypeSupported(videoMime)) {
-                    console.warn('[MSE] Not supported:', videoMime);
+                    _pwarn('[MSE] Not supported:', videoMime);
                     const isHevc = /^hvc|^hev|^hev1/i.test(vc) || vc.indexOf('hvc1') === 0;
                     this.showErrorMessage(isHevc
                         ? 'Video HEVC (H.265) nao suportado por este navegador. Tente outro canal ou qualidade.'
@@ -916,7 +920,7 @@ class VideoPlayer {
                     ac = at.codec || (at.info && at.info.codec) || 'mp4a.40.2';
                     audioMime = 'audio/mp4; codecs="' + ac + '"';
                     if (!MediaSource.isTypeSupported(audioMime)) {
-                        console.warn('[MSE] Audio MIME not supported:', audioMime);
+                        _pwarn('[MSE] Audio MIME not supported:', audioMime);
                         audioMime = '';
                     }
                 }
@@ -937,10 +941,10 @@ class VideoPlayer {
                 }
 
                 const initSegs = mp4boxFile.initializeSegmentation();
-                console.log('[MSE] Init segments:', initSegs.length);
+                _plog('[MSE] Init segments:', initSegs.length);
                 for (const seg of initSegs) {
-                    if (seg.id === vt.id) { videoInitSegment = seg.buffer; console.log('[MSE] Video init:', seg.buffer.byteLength); }
-                    else if (at && seg.id === at.id) { audioInitSegment = seg.buffer; console.log('[MSE] Audio init:', seg.buffer.byteLength); }
+                    if (seg.id === vt.id) { videoInitSegment = seg.buffer; _plog('[MSE] Video init:', seg.buffer.byteLength); }
+                    else if (at && seg.id === at.id) { audioInitSegment = seg.buffer; _plog('[MSE] Audio init:', seg.buffer.byteLength); }
                 }
 
                 mp4boxFile.start();
@@ -949,7 +953,7 @@ class VideoPlayer {
                 this.videoEl.src = URL.createObjectURL(mediaSource);
 
                 mediaSource.addEventListener('sourceopen', () => {
-                    console.log('[MSE] SourceOpen');
+                    _plog('[MSE] SourceOpen');
                     try {
                         videoSB = mediaSource.addSourceBuffer(videoMime);
                         videoSB.onupdateend = () => { videoAppending = false; evicting = false; if (pendingEviction) { pendingEviction = false; forceEvictAll(); } flushVideo(); };
@@ -957,7 +961,7 @@ class VideoPlayer {
                         if (audioMime) {
                             audioSB = mediaSource.addSourceBuffer(audioMime);
                             audioSB.onupdateend = () => { audioAppending = false; evicting = false; if (pendingEviction) { pendingEviction = false; forceEvictAll(); } flushAudio(); };
-                            console.log('[MSE] Audio SourceBuffer created');
+                            _plog('[MSE] Audio SourceBuffer created');
                         }
 
                         this.videoEl.onloadeddata = () => {
@@ -970,7 +974,7 @@ class VideoPlayer {
                         };
                         this.videoEl.onerror = () => {
                             const err = this.videoEl.error;
-                            console.error('[MSE] Video error:', err?.code, err?.message);
+                            _perr('[MSE] Video error:', err?.code, err?.message);
                             this.showErrorMessage('Erro ao reproduzir.');
                             cleanup();
                         };
@@ -985,29 +989,29 @@ class VideoPlayer {
                         flushVideo();
                         flushAudio();
                     } catch(e) {
-                        console.error('[MSE] sourceopen error:', e.message);
+                        _perr('[MSE] sourceopen error:', e.message);
                         this.showErrorMessage('Erro ao configurar player.');
                         cleanup();
                     }
                 });
 
                 mediaSource.addEventListener('error', () => {
-                    console.error('[MSE] MediaSource error');
+                    _perr('[MSE] MediaSource error');
                     cleanup();
                 });
             };
 
             mp4boxFile.onError = (e) => {
-                console.error('[MSE] MP4Box error:', e);
+                _perr('[MSE] MP4Box error:', e);
             };
 
-            console.log('[MSE] Starting fetch...');
+            _plog('[MSE] Starting fetch...');
             this.mseAbortController = new AbortController();
             let chunkCount = 0;
 
             const waitForDrain = () => {
                 if (videoSegQueue.length < 15 && audioSegQueue.length < 15) return Promise.resolve();
-                console.log('[MSE] Throttling fetch: vq:', videoSegQueue.length, 'aq:', audioSegQueue.length);
+                _plog('[MSE] Throttling fetch: vq:', videoSegQueue.length, 'aq:', audioSegQueue.length);
                 return new Promise(resolve => {
                     const check = () => {
                         if (aborted || (videoSegQueue.length < 5 && audioSegQueue.length < 5)) resolve();
@@ -1022,7 +1026,7 @@ class VideoPlayer {
             const watchdog = setInterval(() => {
                 if (aborted || ready) { clearInterval(watchdog); return; }
                 if (fedBytes > 60 * 1024 * 1024) {
-                    console.error('[MSE] No moov after 60MB — aborting');
+                    _perr('[MSE] No moov after 60MB — aborting');
                     this.showErrorMessage('Formato nao suportado (sem moov/MP4).');
                     cleanup();
                     clearInterval(watchdog);
@@ -1034,7 +1038,7 @@ class VideoPlayer {
                 if (!response.ok) throw new Error('HTTP ' + response.status);
                 const ctype = (response.headers.get('content-type') || '').toLowerCase();
                 if (ctype.includes('matroska') || ctype.includes('mkv')) {
-                    console.error('[MSE] MKV content-type detected — attempting mpegts fallback');
+                    _perr('[MSE] MKV content-type detected — attempting mpegts fallback');
                     cleanup();
                     this.tryMkvFallback(url);
                     return;
@@ -1044,14 +1048,14 @@ class VideoPlayer {
                 const pump = () => {
                     return reader.read().then(({ done, value }) => {
                         if (done || aborted) {
-                            console.log('[MSE] Fetch complete, segments queued:', videoSegQueue.length);
+                            _plog('[MSE] Fetch complete, segments queued:', videoSegQueue.length);
                             if (mp4boxFile) { try { mp4boxFile.flush(); } catch(e) {} }
                             return;
                         }
                         if (firstChunk) {
                             firstChunk = false;
                             if (value.length >= 4 && value[0] === 0x1A && value[1] === 0x45 && value[2] === 0xDF && value[3] === 0xA3) {
-                                console.error('[MSE] EBML/MKV magic detected — attempting mpegts fallback');
+                                _perr('[MSE] EBML/MKV magic detected — attempting mpegts fallback');
                                 cleanup();
                                 this.tryMkvFallback(url);
                                 return;
@@ -1066,10 +1070,10 @@ class VideoPlayer {
                             fedBytes = fileOffset;
                             chunkCount++;
                             if (chunkCount % 100 === 0) {
-                                console.log('[MSE] Fed', chunkCount, 'chunks,', fileOffset, 'bytes, vq:', videoSegQueue.length, 'aq:', audioSegQueue.length);
+                                _plog('[MSE] Fed', chunkCount, 'chunks,', fileOffset, 'bytes, vq:', videoSegQueue.length, 'aq:', audioSegQueue.length);
                             }
                         } catch(e) {
-                            console.error('[MSE] mp4box error:', e?.message || e, 'offset:', fileOffset);
+                            _perr('[MSE] mp4box error:', e?.message || e, 'offset:', fileOffset);
                         }
                         return waitForDrain().then(pump);
                     });
@@ -1077,7 +1081,7 @@ class VideoPlayer {
                 return pump();
             }).catch((e) => {
                 if (e.name === 'AbortError' || aborted) return;
-                console.error('[MSE] Fetch error:', e.message);
+                _perr('[MSE] Fetch error:', e.message);
                 const corsFail = /Failed to fetch|NetworkError|CORS/i.test(e.message || '');
                 this.showErrorMessage(corsFail
                     ? 'Sem acesso ao stream (CORS/rede). Tente outro filme ou canal.'
@@ -1086,7 +1090,7 @@ class VideoPlayer {
             });
 
         } catch(e) {
-            console.error('[MSE] Init error:', e.message);
+            _perr('[MSE] Init error:', e.message);
             this.showErrorMessage('Erro ao inicializar player MSE.');
             cleanup();
         }
@@ -1112,7 +1116,7 @@ class VideoPlayer {
         if (!(typeof mpegts !== 'undefined' && mpegts.isSupported())) { this.showMkvError(); return; }
         this._mkvMpegtsTried = true;
         this._inMkvFallback = true;
-        console.log('[MKV] Native/MSE failed, attempting mpegts...');
+        _plog('[MKV] Native/MSE failed, attempting mpegts...');
         this.playMpegts(url);
         if (this._mkvMpegtsTimer) clearTimeout(this._mkvMpegtsTimer);
         this._mkvMpegtsTimer = setTimeout(() => {
@@ -1150,7 +1154,7 @@ class VideoPlayer {
         };
         this.videoEl.onerror = () => {
             const err = this.videoEl.error;
-            console.warn('[DIRECT] Error:', err?.code, err?.message);
+            _pwarn('[DIRECT] Error:', err?.code, err?.message);
             if (!this.loader.classList.contains('hidden')) {
                 this.showErrorMessage('Erro ao carregar video.');
             }
@@ -1209,8 +1213,8 @@ class VideoPlayer {
         this._stallStrikes = 0;
         clearTimeout(this._reconnectTimer);
         this._restartCount = (this._restartCount || 0) + 1;
-        if (this._restartCount > 60) { console.warn('[LIVE] Muitas reconexoes — desistindo'); return; }
-        console.log('[LIVE] Reconectando stream (' + this._restartCount + ')...');
+        if (this._restartCount > 60) { _pwarn('[LIVE] Muitas reconexoes — desistindo'); return; }
+        _plog('[LIVE] Reconectando stream (' + this._restartCount + ')...');
         this._cameFromHls = false;
         this._liveStatusSent = false;
         this.destroyMpegts();
