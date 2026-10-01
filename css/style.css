@@ -429,7 +429,7 @@ html,body{height:100%;font-family:var(--font);background:var(--bg-0);color:var(-
 .parental-title{font-size:17px;font-weight:800;margin-bottom:7px}
 .parental-msg{font-size:13px;color:var(--text-2);margin-bottom:18px}
 .pin-digits{display:flex;justify-content:center;gap:13px;margin-bottom:13px}
-.pin-digit{width:54px;height:60px;text-align:center;font-size:24px;font-weight:800;background:var(--surface);border:1px solid var(--border);border-radius:12px;color:var(--text-1);font-family:var(--font);transition:var(--transition);outline:none}
+.pin-digit{width:54px;height:60px;text-align:center;font-size:24px;font-weight:800;background:var(--surface);border:1px solid var(--border);border-radius:12px;color:var(--text-1);font-family:var(--font);transition:var(--transition);outline:none;-webkit-text-security:disc;text-security:disc}
 .pin-digit:focus{border-color:var(--accent);box-shadow:0 0 0 4px rgba(229,9,20,.14);background:var(--surface-2)}
 .parental-error{font-size:12px;color:#ff7b7b;margin-bottom:11px;font-weight:600}
 .parental-actions{display:flex;flex-wrap:wrap;justify-content:center;gap:9px;margin-top:7px}
