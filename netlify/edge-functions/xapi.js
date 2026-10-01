@@ -57,6 +57,9 @@ export default async (request, context) => {
         });
     }
 
+    const dbg = url.searchParams.has('__dbg');
+    if (dbg) url.searchParams.delete('__dbg');
+
     const target = new URL(prov.host.replace(/\/+$/, '') + splat);
     // repassa a query do cliente...
     for (const [k, v] of url.searchParams) {
@@ -81,8 +84,21 @@ export default async (request, context) => {
             redirect: 'follow',
             signal: AbortSignal.timeout(30000)
         });
-    } catch {
+    } catch (e) {
+        if (dbg) {
+            return new Response(JSON.stringify({ dbg: 1, target: target.href, fetchError: String(e && e.message || e) }), {
+                status: 200, headers: { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
+            });
+        }
         return new Response('Bad Gateway', { status: 502, headers: { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'text/plain' } });
+    }
+
+    if (dbg) {
+        const text = await upstream.text();
+        return new Response(JSON.stringify({
+            dbg: 1, target: target.href, finalUrl: upstream.url, status: upstream.status,
+            contentType: upstream.headers.get('content-type'), bodyHead: text.slice(0, 300)
+        }), { status: 200, headers: { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
     }
 
     const resHeaders = new Headers(upstream.headers);
