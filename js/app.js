@@ -83,9 +83,10 @@ document.addEventListener('DOMContentLoaded', () => {
         return best;
     }
     async function _omdbFetch(params) {
+        let quota = false;
         for (let i = 0; i < _omdbKeys.length; i++) {
             const key = _omdbPickKey();
-            if (!key) return null;
+            if (!key) break;
             const u = _omdbUsage();
             u.counts[key] = (u.counts[key] || 0) + 1;
             _omdbUsageSave(u);
@@ -94,12 +95,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 const j = await res.json();
                 if (j && j.Response === 'False' && /limit|quota|exceed/i.test(j.Error || '')) {
                     const u2 = _omdbUsage(); u2.dead[key] = true; _omdbUsageSave(u2);
+                    quota = true;
                     continue;
                 }
                 return j;
             } catch (e) { continue; }
         }
-        return null;
+        return quota ? { __quota: true } : { __none: true };
     }
 
     // Cache persistente (localStorage) — estica o limite diario do OMDb
@@ -136,18 +138,85 @@ document.addEventListener('DOMContentLoaded', () => {
         t = t.replace(/\s{2,}/g, ' ').trim();
         return t || String(name || '');
     }
-    async function omdbLookup(title, year, type) {
-        if (!OMDB_HAS || !title) return null;
-        const yr = (year && String(year) !== '0' && Number(year) > 1900) ? String(year) : '';
-        const base = 't|' + title + '|' + yr + '|' + (type || '');
-        const cached = omdbGet(base);
-        if (cached !== undefined) return cached;
+    // ===== Supabase: cache IMDb compartilhado entre todos os clientes =====
+    // Cada título consome a cota OMDb uma única vez no mundo (não uma por navegador).
+    const OMDB_AUTO_BUDGET = 500; // lookups automáticos (cards) por navegador/dia
+    const _supaRest = (() => {
+        try {
+            const m = document.querySelector('meta[name="supabase-url"]');
+            const k = document.querySelector('meta[name="supabase-anon"]');
+            const url = (m && m.getAttribute('content')) || 'https://figvurwbnocrzoupvtgs.supabase.co';
+            const key = (k && k.getAttribute('content')) || 'sb_publishable_MRl6mB27qtXrDMyF9obwUg_vYtSNh7f';
+            return key ? { url: String(url).replace(/\/+$/, ''), key: String(key) } : null;
+        } catch (e) { return null; }
+    })();
+    let _supaOff = false; // tabela/policies ausentes: desliga a camada remota em silêncio
+    let _supaFails = 0;
+    function _autoBudget() {
+        const today = new Date().toISOString().slice(0, 10);
+        try {
+            let b = JSON.parse(localStorage.getItem('opentv_omdb_budget') || 'null');
+            if (!b || b.date !== today) b = { date: today, used: 0 };
+            return b;
+        } catch (e) { return { date: today, used: 0 }; }
+    }
+    function _autoBudgetTake() {
+        const b = _autoBudget();
+        if (b.used >= OMDB_AUTO_BUDGET) return false;
+        b.used++;
+        try { localStorage.setItem('opentv_omdb_budget', JSON.stringify(b)); } catch (e) {}
+        return true;
+    }
+    async function _remoteGet(key) {
+        if (!_supaRest || _supaOff) return undefined;
+        try {
+            const res = await fetch(_supaRest.url + '/rest/v1/omdb_cache?select=data,not_found&key=eq.' + encodeURIComponent(key),
+                { headers: { apikey: _supaRest.key, Authorization: 'Bearer ' + _supaRest.key } });
+            if (res.status === 404 || res.status === 403) { if (++_supaFails >= 2) _supaOff = true; return undefined; }
+            if (!res.ok) return undefined;
+            const rows = await res.json();
+            if (!Array.isArray(rows) || !rows.length) return undefined;
+            return { data: rows[0].data || null, notFound: !!rows[0].not_found };
+        } catch (e) { return undefined; }
+    }
+    async function _remotePut(key, val) {
+        if (!_supaRest || _supaOff) return;
+        try {
+            const res = await fetch(_supaRest.url + '/rest/v1/omdb_cache?on_conflict=key', {
+                method: 'POST',
+                headers: { apikey: _supaRest.key, Authorization: 'Bearer ' + _supaRest.key, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=minimal' },
+                body: JSON.stringify({ key, data: val || null, not_found: !val, updated_at: new Date().toISOString() })
+            });
+            if (res.status === 404 || res.status === 403) { if (++_supaFails >= 2) _supaOff = true; }
+        } catch (e) {}
+    }
+    const _omdbPending = new Map();
+    function _dedupe(base, fn) {
+        if (_omdbPending.has(base)) return _omdbPending.get(base);
+        const p = fn().catch(() => null);
+        p.finally(() => _omdbPending.delete(base));
+        _omdbPending.set(base, p);
+        return p;
+    }
+    async function _lookupCached(base) {
+        const local = omdbGet(base);
+        if (local !== undefined) return local;
+        const rem = await _remoteGet(base);
+        if (rem !== undefined) {
+            const v = (rem.notFound || !rem.data) ? null : rem.data;
+            omdbSet(base, v);
+            return v;
+        }
+        return undefined;
+    }
+    async function _lookupNet(title, yr, type, base) {
         const clean = cleanOmdbTitle(title);
         const attempts = [];
         if (clean !== title && yr) attempts.push({ t: clean, y: yr });
         attempts.push({ t: clean, y: yr });
         if (yr) attempts.push({ t: clean, y: '' });
         if (clean !== title) attempts.push({ t: title, y: '' });
+        let blocked = false;
         for (const a of attempts) {
             if (omdbGet('t|' + a.t + '|' + a.y + '|' + (type || '')) !== undefined && a.t !== title) continue;
             try {
@@ -155,23 +224,73 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (a.y) p += '&y=' + a.y;
                 if (type) p += '&type=' + type;
                 const j = await _omdbFetch(p);
-                if (j && j.Response === 'True') { omdbSet(base, j); return j; }
+                if (j && j.__quota) return null; // cota estourada: tenta em outra visita, não cacheia
+                if (j && j.__none) { blocked = true; continue; }
+                blocked = false;
+                if (j && j.Response === 'True') { omdbSet(base, j); _remotePut(base, j); return j; }
             } catch (e) {}
         }
+        if (blocked) return null;
         omdbSet(base, null);
+        _remotePut(base, null);
         return null;
+    }
+    // Fila dos cards: drena 1 título por intervalo (limite OMDb de 100 req/h por chave).
+    // Detalhe (explicit) entra na frente da fila: é o próprio usuário pedindo.
+    const FILL_GAP_MS = Math.max(4000, Math.round(36000 / Math.max(1, _omdbKeys.length)));
+    const _fillQueue = [];
+    let _fillTimer = null;
+    let _fillBusy = false;
+    function _fillPump() {
+        _fillTimer = null;
+        if (_fillBusy) return;
+        if (!_fillQueue.length) return;
+        if (!_omdbPickKey()) { _fillTimer = setTimeout(_fillPump, 60000); return; }
+        const job = _fillQueue.shift();
+        if (!job) return;
+        _fillBusy = true;
+        Promise.resolve()
+            .then(job)
+            .catch(() => null)
+            .then(() => {
+                _fillBusy = false;
+                if (_fillQueue.length && !_fillTimer) _fillTimer = setTimeout(_fillPump, FILL_GAP_MS);
+            });
+    }
+    function _fillEnqueue(job) {
+        _fillQueue.push(job);
+        if (!_fillTimer) _fillTimer = setTimeout(_fillPump, 0);
+    }
+    async function omdbLookup(title, year, type, opts) {
+        if (!OMDB_HAS || !title) return null;
+        const auto = !!(opts && opts.auto);
+        const yr = (year && String(year) !== '0' && Number(year) > 1900) ? String(year) : '';
+        const base = 't|' + title + '|' + yr + '|' + (type || '');
+        return _dedupe(base, async () => {
+            const hit = await _lookupCached(base);
+            if (hit !== undefined) return hit;
+            if (!auto) return _lookupNet(title, yr, type, base);
+            if (!_autoBudgetTake()) return null;
+            return new Promise(resolve => {
+                _fillEnqueue(() => { _lookupNet(title, yr, type, base).then(resolve, () => resolve(null)); });
+            });
+        });
     }
     async function omdbSeason(imdbID, season) {
         if (!OMDB_HAS || !imdbID || !season) return null;
         const key = 's|' + imdbID + '|' + season;
-        const cached = omdbGet(key);
-        if (cached !== undefined) return cached;
-        try {
-            const j = await _omdbFetch('&i=' + encodeURIComponent(imdbID) + '&Season=' + season);
-            const out = (j && j.Response === 'True' && Array.isArray(j.Episodes)) ? j : null;
-            omdbSet(key, out);
-            return out;
-        } catch (e) { omdbSet(key, null); return null; }
+        return _dedupe(key, async () => {
+            const hit = await _lookupCached(key);
+            if (hit !== undefined) return hit;
+            try {
+                const j = await _omdbFetch('&i=' + encodeURIComponent(imdbID) + '&Season=' + season);
+                if (j && (j.__quota || j.__none)) return null;
+                const out = (j && j.Response === 'True' && Array.isArray(j.Episodes)) ? j : null;
+                omdbSet(key, out);
+                _remotePut(key, out);
+                return out;
+            } catch (e) { return null; }
+        });
     }
     function qualityBadge(name) {
         const n = String(name || '').toUpperCase();
@@ -1685,6 +1804,35 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('section-series')?.scrollTo(0, 0);
     }
 
+    const _cardRatingObs = ('IntersectionObserver' in window) ? new IntersectionObserver(es => {
+        es.forEach(e => {
+            if (!e.isIntersecting) return;
+            _cardRatingObs.unobserve(e.target);
+            _fillCardRating(e.target);
+        });
+    }, { rootMargin: '240px 0px' }) : null;
+    function _fillCardRating(card) {
+        if (!card || !card.isConnected || !OMDB_HAS) return;
+        const title = card.dataset.rTitle;
+        if (!title) return;
+        const type = card.dataset.rType === 'series' ? 'series' : 'movie';
+        const promise = omdbLookup(title, card.dataset.rYear || '', type, { auto: true });
+        promise.then(om => {
+            const r = om && om.imdbRating && om.imdbRating !== 'N/A' ? Number(om.imdbRating) : 0;
+            if (!(r > 0) || !card.isConnected) return;
+            let el = card.querySelector('.card-meta .rating');
+            if (!el) {
+                const body = card.querySelector('.card-body');
+                if (!body) return;
+                let meta = body.querySelector('.card-meta');
+                if (!meta) { meta = document.createElement('div'); meta.className = 'card-meta'; body.appendChild(meta); }
+                el = document.createElement('span'); el.className = 'rating'; meta.insertBefore(el, meta.firstChild);
+            }
+            el.classList.add('imdb');
+            el.innerHTML = '<i class="fas fa-star"></i> ' + r.toFixed(1) + '<span class="src">IMDb</span>';
+        }).catch(() => {});
+    }
+
     function createCard(item, type) {
         const card = document.createElement('div');
         card.className = 'content-card';
@@ -1720,6 +1868,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             open();
         });
+        card.dataset.rTitle = title;
+        card.dataset.rType = type;
+        card.dataset.rYear = (item.year && String(item.year) !== '0') ? String(item.year) : '';
+        if (_cardRatingObs) _cardRatingObs.observe(card);
         return card;
     }
 
@@ -1782,8 +1934,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const content = $('detail-content');
         showLoading('Carregando...');
         let info = null;
+        const omPromise = omdbLookup(movie.name, movie.year);
         try { info = await api.getVodInfo(movie.stream_id); } catch (e) {}
-        const om = await omdbLookup(movie.name, movie.year);
+        const om = await omPromise;
         hideLoading();
         const title = movie.name || '';
         const plot = (om && om.Plot && om.Plot !== 'N/A') ? om.Plot : (info?.info?.plot || '');

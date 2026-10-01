@@ -22,3 +22,4 @@ core-*.js
 enrich-*.txt
 create-tables.js
 diag-offline.js
+tools/.warm-state.json
