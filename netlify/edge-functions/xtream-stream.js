@@ -79,6 +79,24 @@ export default async (request, context) => {
         return imagePlaceholder();
     }
 
+    // Segmento .ts com 404/5xx pontual (throttle/token race do provedor): uma unica repeticao.
+    // Sucesso na repeticao = navegador nunca ve o erro (console limpo); falha = repassa o status.
+    const isTs = /\.ts(\?|$)/i.test(parsed.pathname);
+    if (isTs && request.method !== 'HEAD' && (upstream.status === 404 || upstream.status >= 500)) {
+        try { if (upstream.body) await upstream.body.cancel(); } catch { /* descarta */ }
+        await new Promise(r => setTimeout(r, 250));
+        try {
+            upstream = await fetch(parsed.href, {
+                method: 'GET',
+                headers: fwd,
+                redirect: 'follow',
+                signal: AbortSignal.timeout(12000)
+            });
+        } catch {
+            return new Response('Bad Gateway', { status: 502, headers: { 'Access-Control-Allow-Origin': '*' } });
+        }
+    }
+
     const resHeaders = new Headers(upstream.headers);
     resHeaders.delete('content-encoding');
     resHeaders.set('Access-Control-Allow-Origin', '*');

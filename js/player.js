@@ -26,7 +26,7 @@ class VideoPlayer {
         this.isLive = false;
         this.hideTimer = null;
         this.retryCount = 0;
-        this.maxRetries = 3;
+        this.maxRetries = 8;
         this.playAttempt = 0;
         this.mediaRecoverCount = 0;
         this._mkvMpegtsTried = false;
@@ -427,7 +427,7 @@ class VideoPlayer {
                 hasAudio: true,
                 hasVideo: true
             }, {
-                enableWorker: !(/Mobi|Android/i.test(navigator.userAgent || '')),
+                enableWorker: false,
                 enableStashBuffer: true,
                 stashInitialSize: 384,
                 autoCleanupSourceBuffer: true,
@@ -532,7 +532,7 @@ class VideoPlayer {
             maxBufferLength: this.isLive ? 26 : 30,
             maxMaxBufferLength: this.isLive ? 60 : 120,
             backBufferLength: 30,
-            startFragPrefetch: true,
+            startFragPrefetch: false,
             maxBufferHole: 0.8,
             highBufferWatchdogPeriod: 2,
             nudgeOffset: 0.2,
@@ -540,7 +540,7 @@ class VideoPlayer {
             maxFragLookUpTolerance: 0.25,
             abrEwmaDefaultEstimate: 500000,
             testBandwidth: false,
-            progressive: true,
+            progressive: false,
             manifestLoadPolicy: {
                 default: {
                     maxTimeToFirstByteMs: 8000,
@@ -603,7 +603,7 @@ class VideoPlayer {
                             if (this.retryCount < this.maxRetries) {
                                 this.retryCount++;
                                 _plog('[HLS] Manifest invalido (corpo upstream) — retry ' + this.retryCount + '/' + this.maxRetries);
-                                const delay = 800 * this.retryCount;
+                                const delay = 1200 * this.retryCount;
                                 setTimeout(() => {
                                     try { if (this.hls) this.hls.startLoad(); } catch (e) {}
                                 }, delay);
