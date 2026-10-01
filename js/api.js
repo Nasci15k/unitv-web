@@ -146,10 +146,12 @@ class XtreamAPI {
         return `${base}?${sess}type=get_image&stream_icon=${encodeURIComponent(raw)}`;
     }
 
-    async fetch(url, retries = this.maxRetries, timeoutMs = this.timeoutMs) {
+    async fetch(url, retries = this.maxRetries, timeoutMs = this.timeoutMs, _isRetry = false) {
         const cached = this.cache.get(url);
         if (cached && Date.now() - cached.time < this.cacheTime) return cached.data;
-        if (this._pending.has(url)) return this._pending.get(url);
+        // _isRetry: a tentativa repetida NAO pode voltar ao proprio run pendente
+        // (senao o retry espera ele mesmo = deadlock ate o timeout do provedor)
+        if (!_isRetry && this._pending.has(url)) return this._pending.get(url);
 
         const run = (async () => {
             try {
@@ -162,7 +164,7 @@ class XtreamAPI {
                     const retryable = res.status === 429 || res.status >= 500;
                     if (retryable && retries > 0) {
                         await new Promise(r => setTimeout(r, 1200 + (this.maxRetries - retries) * 800));
-                        return this.fetch(url, retries - 1, timeoutMs);
+                        return this.fetch(url, retries - 1, timeoutMs, true);
                     }
                     throw new Error(`HTTP ${res.status}`);
                 }
@@ -177,7 +179,7 @@ class XtreamAPI {
                 const corsLike = err instanceof TypeError || /Failed to fetch|NetworkError|CORS/i.test(msg);
                 if (!corsLike && retries > 0) {
                     await new Promise(r => setTimeout(r, 800));
-                    return this.fetch(url, retries - 1, timeoutMs);
+                    return this.fetch(url, retries - 1, timeoutMs, true);
                 }
                 if (!corsLike) _perr('API Error:', err);
                 throw err;
