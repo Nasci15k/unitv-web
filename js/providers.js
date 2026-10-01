@@ -1,7 +1,10 @@
-// OpenTv — Multi-fornecedor (F1)
+// OpenTv — Multi-fornecedor (F1) + dedup multicamadas/remapeamento de
+// categorias (F4).
 // Registro de provedores no Supabase + carga de catálogo por provedor com
 // ISOLAMENTO total: falha/timeout de um provedor nunca afeta o provedor
 // padrão (telefunplay), que continua no caminho legado /xtream-api.
+// A lógica de dedup/remapeamento mora em js/catalog-lib.js (compartilhada
+// com o worker de indexação do Supabase — F5).
 window.Providers = (function () {
     const SUPA = 'https://figvurwbnocrzoupvtgs.supabase.co';
     const ANON = 'sb_publishable_MRl6mB27qtXrDMyF9obwUg_vYtSNh7f';
@@ -11,6 +14,8 @@ window.Providers = (function () {
     // > _CATALOG_TIMEOUT (180s) do api.js: a carga do provedor tem margem
     // para o download completo das listas pela edge antes de desistir.
     const PER_PROVIDER_TIMEOUT = 200000;
+
+    const CL = window.CatalogLib;
 
     let registryCache = null;
 
@@ -118,9 +123,11 @@ window.Providers = (function () {
     }
 
     // ---------- namespacing ----------
+    // Cats no formato cru do Xtream ({category_id, category_name}), que é o
+    // que o app.js lê em todo lugar (pills, grupos, kids, cards).
     function nsCat(c, pid) {
         const o = Object.assign({}, c);
-        if (o.id != null) o.id = pid + ':' + o.id;
+        if (o.category_id != null) o.category_id = pid + ':' + o.category_id;
         return o;
     }
 
@@ -134,61 +141,53 @@ window.Providers = (function () {
         return o;
     }
 
-    function normName(s) {
-        return String(s || '')
-            .toLowerCase()
-            .replace(/\s+/g, ' ')
-            .replace(/\s*\b(1080p|720p|2160p|4k|fhd|hdrip|hd|sd|bluray|bdrip|web-?dl|hdcam|cam|dublado|dub|legendado|leg)\b\s*/g, ' ')
-            .replace(/\s+/g, ' ')
-            .trim();
-    }
-
-    function yearsCompatible(a, b) {
-        if (!a || !b) return true; // um sem ano: assume mesmo título
-        return String(a) === String(b);
-    }
-
     // ---------- merge ----------
     // state.all* já contêm o catálogo do provedor padrão (caminho legado).
-    // loaded = resultados de fetchCatalogs() já namespaced.
-    // Em empate de título, o PADRÃO vence (é o que está provado); o item do
-    // provedor novo vira fonte alternativa (_alts) p/ failover futuro (F2).
+    // loaded = resultados de fetchCatalogs() por pack.
+    // Em prova de igualdade, o PADRÃO vence: o item extra vira fonte
+    // alternativa (_alts) p/ failover (F2). Canais deduplicam só por nome
+    // (mesmo nome = mesma estação; variações HD/SD/H265 viram _alts).
     function mergeInto(state, loaded) {
         if (!Array.isArray(loaded) || !loaded.length) return false;
 
         const defaultId = DEFAULT_ID;
 
-        const mergeList = (defList, extraList, isSeries) => {
+        const mergeList = (defList, extraList, loose) => {
             const byName = new Map();
             for (const item of defList) {
                 item.provider = defaultId;
-                const n = normName(item.name || item.title);
+                const n = CL.normName(item.name || item.title);
+                if (!n) continue;
                 if (!byName.has(n)) byName.set(n, []);
                 byName.get(n).push(item);
             }
             const keep = [];
+            let dups = 0;
             for (const extra of extraList) {
-                const n = normName(extra.name || extra.title);
-                const cands = byName.get(n);
+                const n = CL.normName(extra.name || extra.title);
                 let dup = null;
-                if (cands) {
-                    for (const c of cands) {
-                        if (yearsCompatible(c.year, extra.year)) { dup = c; break; }
+                if (n) {
+                    for (const c of (byName.get(n) || [])) {
+                        if (loose || CL.isSameWork(c, extra)) { dup = c; break; }
                     }
                 }
                 if (dup) {
                     if (!dup._alts) dup._alts = [];
                     dup._alts.push(extra.stream_id); // id namespaced, já jogável
+                    dups++;
                 } else {
                     keep.push(extra);
-                    if (!byName.has(n)) byName.set(n, []);
-                    byName.get(n).push(extra);
+                    if (n) {
+                        if (!byName.has(n)) byName.set(n, []);
+                        byName.get(n).push(extra);
+                    }
                 }
             }
-            return keep;
+            return { keep, dups };
         };
 
-        // filtra extras já namespaced e ordena por prioridade (menor primeiro)
+        // ordena por prioridade (menor primeiro): packs de menor prioridade
+        // perdem na prova de igualdade e viram _alts
         const sorted = loaded.slice().sort((a, b) => a.priority - b.priority);
 
         const newMovies = [];
@@ -200,23 +199,40 @@ window.Providers = (function () {
 
         for (const pack of sorted) {
             const pid = pack.pid;
-            const m = pack.movies.map(x => nsItem(x, pid, false));
-            const s = pack.series.map(x => nsItem(x, pid, true));
-            const l = pack.live.map(x => nsItem(x, pid, false));
+
+            // 1) namespacifica as cats primeiro: as chaves do map são ids
+            //    prefixados ("b:5") e os valores são ids crus do base — sem
+            //    colisão possível entre numerações de provedores diferentes.
+            const lCats = pack.liveCats.map(x => nsCat(x, pid));
+            const vCats = pack.vodCats.map(x => nsCat(x, pid));
+            const sCats = pack.seriesCats.map(x => nsCat(x, pid));
+            const lMap = CL.buildCatMap(lCats, state.liveCats);
+            const vMap = CL.buildCatMap(vCats, state.vodCats);
+            const sMap = CL.buildCatMap(sCats, state.seriesCats);
+
+            // 2) nsItem nos itens e remapeia para a cat do base (id cru,
+            //    sem prefixo — é a mesma cat dos itens do provedor padrão)
+            const l = pack.live.map(x => CL.remapCats(nsItem(x, pid, false), lMap));
+            const m = pack.movies.map(x => CL.remapCats(nsItem(x, pid, false), vMap));
+            const s = pack.series.map(x => CL.remapCats(nsItem(x, pid, true), sMap));
+            newLive.push(...l);
             newMovies.push(...m);
             newSeries.push(...s);
-            newLive.push(...l);
-            newLCats.push(...pack.liveCats.map(x => nsCat(x, pid)));
-            newVCats.push(...pack.vodCats.map(x => nsCat(x, pid)));
-            newSCats.push(...pack.seriesCats.map(x => nsCat(x, pid)));
+
+            // 3) cats extras sem match só entram se ainda houver item
+            //    apontando para elas (as remapeadas somem da UI)
+            newLCats.push(...usableCats(lCats, lMap, l));
+            newVCats.push(...usableCats(vCats, vMap, m));
+            newSCats.push(...usableCats(sCats, sMap, s));
         }
 
-        const uniqMovies = mergeList(state.allMovies, newMovies, false);
-        const uniqSeries = mergeList(state.allSeries, newSeries, true);
+        const rm = mergeList(state.allMovies, newMovies, false);
+        const rs = mergeList(state.allSeries, newSeries, false);
+        const rl = mergeList(state.allLive, newLive, true);
 
-        state.allMovies.push(...uniqMovies);
-        state.allSeries.push(...uniqSeries);
-        state.allLive.push(...newLive);
+        state.allMovies.push(...rm.keep);
+        state.allSeries.push(...rs.keep);
+        state.allLive.push(...rl.keep);
         state.liveCats.push(...newLCats);
         state.vodCats.push(...newVCats);
         state.seriesCats.push(...newSCats);
@@ -230,8 +246,18 @@ window.Providers = (function () {
         api.setMovieCache(state.allMovies);
         api.setSeriesCache(state.allSeries);
 
-        logDebug('[providers] merge ok | +', uniqMovies.length, 'filmes, +', uniqSeries.length, 'series, +', newLive.length, 'canais');
+        logDebug('[providers] merge ok | +', rm.keep.length, 'filmes,', '+', rs.keep.length, 'series,', '+', rl.keep.length, 'canais',
+            '| dedup -', rm.dups, 'filmes, -', rs.dups, 'series, -', rl.dups, 'canais');
         return true;
+    }
+
+    // Categorias extras sem match só entram se algum item ainda apontar
+    // para elas (as remapeadas deixam de contar e somem da UI).
+    function usableCats(packCats, map, finalItems) {
+        if (!Array.isArray(packCats)) return [];
+        const used = new Set(finalItems.map(x => String(x.category_id)));
+        return packCats.filter(c => c && c.category_id != null &&
+            !map.has(String(c.category_id)) && used.has(String(c.category_id)));
     }
 
     function clearLocalCache() {

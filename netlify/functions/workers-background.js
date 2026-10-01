@@ -142,6 +142,10 @@ exports.handler = async () => {
     log('iniciando rodada');
     try { await checkChannels(); } catch (e) { log('checkChannels erro', e.message); }
     try { await enrichGenres(); } catch (e) { log('enrichGenres erro', e.message); }
+    try {
+        const { runIndexation } = require('./catalog-index');
+        await runIndexation();
+    } catch (e) { log('catalog-index erro', e.message); }
     log('rodada concluida');
     return { statusCode: 202, body: 'worker started' };
 };
