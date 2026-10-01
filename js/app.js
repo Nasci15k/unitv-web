@@ -947,10 +947,32 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 700);
     });
 
+    function pushCatalogStats() {
+        if (!AuthStore.isAdmin()) return;
+        try {
+            const cl = AuthStore.getClient && AuthStore.getClient();
+            if (cl) cl.from('catalog_stats').update({
+                value: { channels: state.allLive.length, movies: state.allMovies.length, series: state.allSeries.length },
+                updated_at: new Date().toISOString()
+            }).eq('key', 'catalog').then(() => {}, () => {});
+        } catch (e) {}
+    }
+
+    // Render do catalogo (1a pintura e de novo quando o merge dos provedores
+    // extras chega em segundo plano). Nao reatacha listeners de filterModes.
+    function renderCatalogViews() {
+        renderHome();
+        renderLiveSidebar();
+        filterLive('');
+        renderMovies(state.moviesPage);
+        renderSeries(state.seriesPage);
+        renderContinueWatching();
+        decorateRowScrolls();
+    }
+
     async function loadAllData() {
-        // Multi-fornecedor: provedores extras carregam EM PARALELO e isolados.
-        // Falha/timeout de qualquer um deles é descartado (Providers.fetchCatalogs);
-        // o provedor padrão abaixo nunca depende disso.
+        // Multi-fornecedor: provedores extras carregam EM SEGUNDO PLANO e nunca
+        // atrasam nem derrubam o provedor padrao (caminho legado).
         const extrasPromise = (window.Providers ? window.Providers.fetchCatalogs() : Promise.resolve([]));
         const [lc, vc, sc, live, movies, series] = await Promise.all([
             safe(() => api.getLiveCategories()), safe(() => api.getVodCategories()), safe(() => api.getSeriesCategories()),
@@ -963,33 +985,22 @@ document.addEventListener('DOMContentLoaded', () => {
         state.vodCats = ContentFilter.filterCats(Array.isArray(vc) ? vc : []);
         state.seriesCats = ContentFilter.filterCats(Array.isArray(sc) ? sc : []);
         api.setLiveCache(state.allLive); api.setMovieCache(state.allMovies); api.setSeriesCache(state.allSeries);
-        // merge dos provedores extras (dedup: padrão vence; extras = fontes alternativas)
-        try {
-            const extras = await extrasPromise;
-            window.Providers && window.Providers.mergeInto(state, extras);
-        } catch (e) { /* extras nunca derrubam o carregamento base */ }
-        // admin conectado -> atualiza estatisticas do catalogo (landing page) com o token dele
-        if (AuthStore.isAdmin()) {
-            try {
-                const cl = AuthStore.getClient && AuthStore.getClient();
-                if (cl) await cl.from('catalog_stats').update({
-                    value: { channels: state.allLive.length, movies: state.allMovies.length, series: state.allSeries.length },
-                    updated_at: new Date().toISOString()
-                }).eq('key', 'catalog');
-            } catch (e) {}
-        }
-        renderHome();
-        renderLiveSidebar();
+        // 1a pintura imediata com o provedor padrao (extras ainda carregando)
+        renderCatalogViews();
         renderFilterModes('movie-filter-modes', 'movies');
         renderFilterModes('series-filter-modes', 'series');
-        filterLive('');
-        renderMovies(1);
-        renderSeries(1);
-        renderContinueWatching();
-        decorateRowScrolls();
         loadServerStatus();
         loadMovieGenres();
         navigateTo('live');
+        pushCatalogStats();
+        // merge quando os extras chegam (sucesso ou falha isolada): re-render
+        extrasPromise.catch(() => []).then(extras => {
+            let merged = false;
+            try {
+                if (Array.isArray(extras) && extras.length && window.Providers) merged = !!window.Providers.mergeInto(state, extras);
+            } catch (e) { merged = true; /* merge pode ter mutado o state: re-render por seguranca */ }
+            if (merged) { pushCatalogStats(); renderCatalogViews(); }
+        });
     }
 
     function renderFilterModes(containerId, kind) {

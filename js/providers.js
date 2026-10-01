@@ -8,7 +8,9 @@ window.Providers = (function () {
     const DEFAULT_ID = 'telefunplay';
     const LS_KEY = 'opentv_providers_v1';
     const LS_TTL = 5 * 60 * 1000;
-    const PER_PROVIDER_TIMEOUT = 45000;
+    // > _CATALOG_TIMEOUT (180s) do api.js: a carga do provedor tem margem
+    // para o download completo das listas pela edge antes de desistir.
+    const PER_PROVIDER_TIMEOUT = 200000;
 
     let registryCache = null;
 
@@ -90,6 +92,7 @@ window.Providers = (function () {
                 logDebug('[providers] descartado (vazio):', p.id);
                 return null;
             }
+            logDebug('[providers] carregado:', p.id, '| live', res.live.length, 'movies', res.movies.length, 'series', res.series.length);
             return res;
         } catch (e) {
             // ISOLAMENTO: provedor com erro é descartado; app segue normalmente
@@ -105,7 +108,9 @@ window.Providers = (function () {
             const extras = extrasOf(list);
             if (!extras.length) return [];
             const results = await Promise.all(extras.map(p => loadOne(p)));
-            return results.filter(Boolean);
+            const packs = results.filter(Boolean);
+            logDebug('[providers] packs ok:', packs.length, 'de', extras.length);
+            return packs;
         } catch (e) {
             logDebug('[providers] falha na carga:', e && e.message);
             return [];
@@ -225,6 +230,7 @@ window.Providers = (function () {
         api.setMovieCache(state.allMovies);
         api.setSeriesCache(state.allSeries);
 
+        logDebug('[providers] merge ok | +', uniqMovies.length, 'filmes, +', uniqSeries.length, 'series, +', newLive.length, 'canais');
         return true;
     }
 

@@ -1,5 +1,9 @@
 window._perr = window._perr || function () { if (window.OPENTV_DEBUG) console.error.apply(console, arguments); };
 
+// Listas COMPLETAS de provedor novo via edge (ex.: 35MB de series) precisam de
+// margem: o download pela edge do Netlify ja levou ~30s e era abortado.
+const _CATALOG_TIMEOUT = 180000;
+
 class XtreamAPI {
     constructor() {
         this.serverUrl = 'https://telefunplay.xyz';
@@ -199,9 +203,9 @@ class XtreamAPI {
     }
 
     async getLiveCategories(pid) { return this.fetch(this.getApiUrl('get_live_categories', {}, pid), undefined, pid ? 30000 : undefined); }
-    async getLiveStreams(catId, pid) { return this.fetch(this.getApiUrl('get_live_streams', catId ? { category_id: catId } : {}, pid), undefined, pid ? 30000 : undefined); }
+    async getLiveStreams(catId, pid) { return this.fetch(this.getApiUrl('get_live_streams', catId ? { category_id: catId } : {}, pid), undefined, pid ? _CATALOG_TIMEOUT : undefined); }
     async getVodCategories(pid) { return this.fetch(this.getApiUrl('get_vod_categories', {}, pid), undefined, pid ? 30000 : undefined); }
-    async getVodStreams(catId, pid) { return this.fetch(this.getApiUrl('get_vod_streams', catId ? { category_id: catId } : {}, pid), undefined, pid ? 30000 : undefined); }
+    async getVodStreams(catId, pid) { return this.fetch(this.getApiUrl('get_vod_streams', catId ? { category_id: catId } : {}, pid), undefined, pid ? _CATALOG_TIMEOUT : undefined); }
     async getVodInfo(id) {
         const { pid, raw } = this._splitId(id);
         return this.fetch(this.getApiUrl('get_vod_info', { vod_id: raw }, pid), undefined, pid ? 20000 : undefined);
@@ -218,7 +222,7 @@ class XtreamAPI {
         } catch (e) { return []; }
     }
     async getSeriesCategories(pid) { return this.fetch(this.getApiUrl('get_series_categories', {}, pid), undefined, pid ? 30000 : undefined); }
-    async getSeries(catId, pid) { return this.fetch(this.getApiUrl('get_series', catId ? { category_id: catId } : {}, pid), undefined, pid ? 30000 : undefined); }
+    async getSeries(catId, pid) { return this.fetch(this.getApiUrl('get_series', catId ? { category_id: catId } : {}, pid), undefined, pid ? _CATALOG_TIMEOUT : undefined); }
     async getSeriesInfo(id) {
         const { pid, raw } = this._splitId(id);
         const data = await this.fetch(this.getApiUrl('get_series_info', { series_id: raw }, pid), undefined, pid ? 20000 : undefined);
