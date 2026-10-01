@@ -13,7 +13,7 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   const url = e.request.url;
   // nunca cachear streams/APIs/dados dinamicos
-  if (/xtream-|sec-api|status-|session-|trial-|\/stats|genres-all|supabase|omdbapi/.test(url)) return;
+  if (/xtream-|\/xapi\/|\/xstr\/|sec-api|status-|session-|trial-|\/stats|genres-all|supabase|omdbapi/.test(url)) return;
   if (e.request.method !== 'GET') return;
   e.respondWith(
     caches.match(e.request).then((hit) => {

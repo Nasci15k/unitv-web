@@ -102,6 +102,7 @@
             <button class="adm-tab" data-tab="notifs"><i class="fas fa-bullhorn"></i> Notificações</button>
             <button class="adm-tab" data-tab="logs"><i class="fas fa-list"></i> Logs de Acesso</button>
             <button class="adm-tab" data-tab="stats"><i class="fas fa-chart-simple"></i> Estatísticas</button>
+            <button class="adm-tab" data-tab="provedores"><i class="fas fa-server"></i> Provedores</button>
         </div>
 
         <div id="tab-users" class="tab-panel">
@@ -151,6 +152,36 @@
                 <tbody id="pay-tbody"></tbody></table>
             </div>
         </div>
+
+        <div id="tab-provedores" class="tab-panel hidden">
+            <div class="card">
+                <h3><i class="fas fa-server"></i> Provedores IPTV
+                    <button class="btn btn-accent" id="btn-add-prov" style="float:right;margin-left:8px"><i class="fas fa-plus"></i> Novo provedor</button>
+                </h3>
+                <p style="color:var(--t3);font-size:12.5px;margin:0 0 12px">
+                    Ative <b>um por vez</b>: habilite, teste e só depois ative o próximo. Se um provedor novo falhar, ele é descartado sozinho —
+                    o provedor padrão (Telefunplay) é o fallback e <b>sempre fica ativo</b>. Alterações levam até 5 min para refletir no player.
+                </p>
+                <div id="prov-form" class="hidden" style="border:1px solid var(--bdr,#2a2f3a);border-radius:8px;padding:14px;margin-bottom:14px">
+                    <input type="hidden" id="pf-id" value="">
+                    <div class="two-col">
+                        <div class="field"><label>Nome</label><input type="text" id="pf-name" placeholder="Ex: Provedor B"></div>
+                        <div class="field"><label>Host</label><input type="text" id="pf-host" placeholder="Ex: http://138.199.50.161:80"></div>
+                        <div class="field"><label>Usuário</label><input type="text" id="pf-user" placeholder="username"></div>
+                        <div class="field"><label>Senha</label><input type="text" id="pf-pass" placeholder="password"></div>
+                        <div class="field"><label>Prioridade (menor = primeiro)</label><input type="text" id="pf-prio" placeholder="100"></div>
+                        <div class="field"><label>Expira em</label><input type="datetime-local" id="pf-exp"></div>
+                    </div>
+                    <div class="field"><label>Observação</label><input type="text" id="pf-note" placeholder="opcional"></div>
+                    <div style="display:flex;gap:8px">
+                        <button class="btn btn-save" id="btn-save-prov"><i class="fas fa-save"></i> Salvar</button>
+                        <button class="btn btn-neu" id="btn-cancel-prov">Cancelar</button>
+                    </div>
+                </div>
+                <table><thead><tr><th>Nome</th><th>Host</th><th>Status</th><th>Prioridade</th><th>Expira</th><th>Ações</th></tr></thead>
+                <tbody id="prov-tbody"></tbody></table>
+            </div>
+        </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -186,6 +217,7 @@
                 $('tab-' + t.dataset.tab).classList.remove('hidden');
                 if (t.dataset.tab === 'logs') loadLogs();
                 if (t.dataset.tab === 'stats') loadStats();
+                if (t.dataset.tab === 'provedores') loadProvedores();
             }));
 
             // ===== USUÁRIOS =====
@@ -360,6 +392,151 @@
             }
 
             function esc(s) { return String(s || '').replace(/&/g, String.fromCharCode(38) + 'amp;').replace(/</g, String.fromCharCode(38) + 'lt;').replace(/>/g, String.fromCharCode(38) + 'gt;'); }
+
+            // ===== PROVEDORES =====
+            const DEFAULT_PID = 'telefunplay';
+            let provFormMode = 'create';
+
+            function provSlug(name) {
+                return String(name || '').toLowerCase()
+                    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                    .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+                    .substring(0, 40);
+            }
+
+            function clearProvidersCache() {
+                try { localStorage.removeItem('opentv_providers_v1'); } catch (e) { /* noop */ }
+            }
+
+            async function loadProvedores() {
+                const { data, error } = await client.from('providers')
+                    .select('id,name,host,username,password,enabled,priority,expires_at,note')
+                    .order('priority', { ascending: true });
+                if (error) {
+                    $('prov-tbody').innerHTML = '<tr><td colspan="6" class="empty">Erro: ' + esc(error.message) +
+                        ' — a tabela existe? Rode supabase/providers.sql no SQL Editor.</td></tr>';
+                    return;
+                }
+                const list = data || [];
+                $('prov-tbody').innerHTML = list.map(p => {
+                    const isDef = p.id === DEFAULT_PID;
+                    const stPill = isDef ? '<span class="pill plan">PADRÃO — SEMPRE ATIVO</span>' :
+                        p.enabled ? '<span class="pill ok">ATIVO</span>' : '<span class="pill none">INATIVO</span>';
+                    const tog = isDef ? '<span class="pill none">fixo</span>' :
+                        '<select class="act-select" data-act="toggle" data-id="' + esc(p.id) + '">' +
+                        '<option value="1"' + (p.enabled ? ' selected' : '') + '>Ativo</option>' +
+                        '<option value="0"' + (!p.enabled ? ' selected' : '') + '>Inativo</option></select>';
+                    const acts = '<div class="row-actions">' + tog +
+                        '<button class="btn btn-neu" data-act="test" data-id="' + esc(p.id) + '">Testar</button>' +
+                        (isDef ? '' :
+                            '<button class="btn btn-neu" data-act="edit" data-id="' + esc(p.id) + '">Editar</button>' +
+                            '<button class="btn btn-rej" data-act="del" data-id="' + esc(p.id) + '">Excluir</button>') +
+                        '</div>';
+                    return '<tr><td><b>' + esc(p.name || p.id) + '</b><br><span class="mono" style="font-size:11px;color:var(--t3)">' + esc(p.id) + '</span></td>' +
+                        '<td class="mono">' + esc(p.host || '') + '</td>' +
+                        '<td>' + stPill + '</td>' +
+                        '<td>' + (Number(p.priority) || 100) + '</td>' +
+                        '<td>' + timeLeft(p.expires_at) + '</td>' +
+                        '<td>' + acts + '</td></tr>';
+                }).join('') || '<tr><td colspan="6" class="empty">Nenhum provedor — rode supabase/providers.sql</td></tr>';
+
+                $('prov-tbody').querySelectorAll('[data-act]').forEach(el => {
+                    const ev = el.tagName === 'SELECT' ? 'change' : 'click';
+                    el.addEventListener(ev, () => provAction(el.dataset, el.value));
+                });
+            }
+
+            async function provAction(d, val) {
+                try {
+                    if (d.act === 'toggle') {
+                        const enabled = val === '1';
+                        const { error } = await client.from('providers').update({ enabled }).eq('id', d.id);
+                        if (error) throw error;
+                        clearProvidersCache();
+                        toast((enabled ? 'Ativado: ' : 'Desativado: ') + d.id + ' — player reflete em até 5 min');
+                        loadProvedores();
+                    }
+                    if (d.act === 'test') {
+                        toast('Testando ' + d.id + '…');
+                        const r = await fetch('/xapi/' + encodeURIComponent(d.id) + '/player_api.php');
+                        const j = await r.json().catch(() => null);
+                        if (!j || !j.user_info) {
+                            toast('Falha no teste de ' + d.id + ' (HTTP ' + r.status + ')', true);
+                            return;
+                        }
+                        const ui = j.user_info;
+                        toast(d.id + ': ' + ui.status + ' | conexões ' + ui.active_cons + '/' + ui.max_connections +
+                            (ui.exp_date ? ' | expira ' + fmtDate(new Date(ui.exp_date * 1000).toISOString()) : ''));
+                    }
+                    if (d.act === 'edit') {
+                        const { data, error } = await client.from('providers').select('*').eq('id', d.id).single();
+                        if (error) throw error;
+                        provFormMode = 'edit';
+                        $('pf-id').value = data.id;
+                        $('pf-name').value = data.name || '';
+                        $('pf-host').value = data.host || '';
+                        $('pf-user').value = data.username || '';
+                        $('pf-pass').value = data.password || '';
+                        $('pf-prio').value = data.priority != null ? data.priority : 100;
+                        $('pf-exp').value = data.expires_at ? String(data.expires_at).slice(0, 16) : '';
+                        $('pf-note').value = data.note || '';
+                        $('prov-form').classList.remove('hidden');
+                        $('prov-form').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    }
+                    if (d.act === 'del') {
+                        if (!confirm('Excluir "' + d.id + '"? O catálogo dele some do player (volta a como estava).')) return;
+                        const { error } = await client.from('providers').delete().eq('id', d.id);
+                        if (error) throw error;
+                        clearProvidersCache();
+                        toast('Provedor excluído: ' + d.id);
+                        loadProvedores();
+                    }
+                } catch (e) { toast('Erro: ' + e.message, true); }
+            }
+
+            $('btn-add-prov').addEventListener('click', () => {
+                provFormMode = 'create';
+                ['pf-id', 'pf-name', 'pf-host', 'pf-user', 'pf-pass', 'pf-note'].forEach(i => { $(i).value = ''; });
+                $('pf-prio').value = '100';
+                $('pf-exp').value = '';
+                $('prov-form').classList.remove('hidden');
+            });
+            $('btn-cancel-prov').addEventListener('click', () => $('prov-form').classList.add('hidden'));
+            $('btn-save-prov').addEventListener('click', async () => {
+                try {
+                    const name = $('pf-name').value.trim();
+                    const host = $('pf-host').value.trim();
+                    const user = $('pf-user').value.trim();
+                    const pass = $('pf-pass').value.trim();
+                    if (!name || !host || !user || !pass) { toast('Preencha nome, host, usuário e senha', true); return; }
+                    if (!/^https?:\/\//i.test(host)) { toast('Host precisa começar com http:// ou https://', true); return; }
+                    const id = $('pf-id').value || provSlug(name);
+                    if (!/^[a-z0-9-]+$/.test(id)) { toast('Nome gera id inválido — use letras e números', true); return; }
+                    if (id === DEFAULT_PID) { toast('O provedor padrão não pode ser alterado', true); return; }
+                    const expRaw = $('pf-exp').value;
+                    const row = {
+                        id, name,
+                        host: host.replace(/\/+$/, ''),
+                        username: user, password: pass,
+                        priority: parseInt($('pf-prio').value, 10) || 100,
+                        expires_at: expRaw ? new Date(expRaw).toISOString() : null,
+                        note: $('pf-note').value.trim()
+                    };
+                    let error;
+                    if (provFormMode === 'edit') {
+                        ({ error } = await client.from('providers').update(row).eq('id', $('pf-id').value));
+                    } else {
+                        row.enabled = true;
+                        ({ error } = await client.from('providers').insert(row));
+                        if (error && error.code === '23505') error.message = 'Já existe um provedor com esse nome/id';
+                    }
+                    if (error) throw error;
+                    clearProvidersCache();
+                    toast('Provedor salvo: ' + id + (provFormMode === 'create' ? ' — ATIVO. Teste antes de ativar o próximo.' : ''));
+                    $('prov-form').classList.add('hidden');
+                    loadProvedores();
+                } catch (e) { toast('Erro ao salvar: ' + e.message, true); }
+            });
 
             // ===== BOOT =====
             (async () => {

@@ -441,7 +441,12 @@ document.addEventListener('DOMContentLoaded', () => {
         getIds(type) {
             const d = this.load();
             const prefix = 'favorite_' + (type === 'movie' ? 'vod' : type) + '_';
-            return Object.keys(d).filter(k => k.startsWith(prefix) && d[k]).map(k => parseInt(k.slice(prefix.length), 10)).filter(n => !isNaN(n));
+            return Object.keys(d).filter(k => k.startsWith(prefix) && d[k]).map(k => {
+                const raw = k.slice(prefix.length);
+                // id namespaced de provedor novo ('prov-a:123') fica string;
+                // id legado numérico continua number (compat total)
+                return raw.includes(':') ? raw : parseInt(raw, 10);
+            }).filter(v => (typeof v === 'string' && !!v) || (typeof v === 'number' && !isNaN(v)));
         },
         remove(type, id) {
             const d = this.load();
@@ -943,6 +948,10 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     async function loadAllData() {
+        // Multi-fornecedor: provedores extras carregam EM PARALELO e isolados.
+        // Falha/timeout de qualquer um deles é descartado (Providers.fetchCatalogs);
+        // o provedor padrão abaixo nunca depende disso.
+        const extrasPromise = (window.Providers ? window.Providers.fetchCatalogs() : Promise.resolve([]));
         const [lc, vc, sc, live, movies, series] = await Promise.all([
             safe(() => api.getLiveCategories()), safe(() => api.getVodCategories()), safe(() => api.getSeriesCategories()),
             safe(() => api.getLiveStreams()), safe(() => api.getVodStreams()), safe(() => api.getSeries())
@@ -954,6 +963,11 @@ document.addEventListener('DOMContentLoaded', () => {
         state.vodCats = ContentFilter.filterCats(Array.isArray(vc) ? vc : []);
         state.seriesCats = ContentFilter.filterCats(Array.isArray(sc) ? sc : []);
         api.setLiveCache(state.allLive); api.setMovieCache(state.allMovies); api.setSeriesCache(state.allSeries);
+        // merge dos provedores extras (dedup: padrão vence; extras = fontes alternativas)
+        try {
+            const extras = await extrasPromise;
+            window.Providers && window.Providers.mergeInto(state, extras);
+        } catch (e) { /* extras nunca derrubam o carregamento base */ }
         // admin conectado -> atualiza estatisticas do catalogo (landing page) com o token dele
         if (AuthStore.isAdmin()) {
             try {
@@ -1722,6 +1736,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function probeStream(streamId) {
+        // provedor novo (id 'pid:...'): sem status dedicado no F1 — neutro,
+        // evita enfileirar milhares de sondagens inúteis
+        if (typeof streamId === 'string' && streamId.includes(':')) return 'warning';
         if (state.serverStatus.size > 100) {
             const srv = state.serverStatus.get(String(streamId));
             if (srv) return srv;
