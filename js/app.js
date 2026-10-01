@@ -999,7 +999,15 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 if (Array.isArray(extras) && extras.length && window.Providers) merged = !!window.Providers.mergeInto(state, extras);
             } catch (e) { merged = true; /* merge pode ter mutado o state: re-render por seguranca */ }
-            if (merged) { pushCatalogStats(); renderCatalogViews(); }
+            if (merged) {
+                pushCatalogStats();
+                renderCatalogViews();
+                // os contadores dos pills (Todos/Streaming/Gênero...) sao
+                // montados so aqui: sem re-render, ficam no valor da 1a
+                // pintura (só o provedor padrão)
+                renderMovieFilterPills();
+                renderSeriesFilterPills();
+            }
         });
     }
 
