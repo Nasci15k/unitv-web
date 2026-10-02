@@ -177,6 +177,11 @@ html,body{height:100%;font-family:var(--font);background:var(--bg-0);color:var(-
 .live-header{margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)}
 .live-header-title{font-size:20px;font-weight:800;letter-spacing:-.3px}
 .live-header-sub{font-size:10.5px;color:var(--text-3);margin-top:3px;text-transform:uppercase;letter-spacing:1.2px;font-weight:700}
+.live-header-row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.region-toggle{display:inline-flex;gap:3px;padding:3px;background:var(--surface);border:1px solid var(--border);border-radius:9px;flex-shrink:0}
+.region-btn{border:none;background:transparent;color:var(--text-3);font-size:11.5px;font-weight:800;padding:6px 14px;border-radius:7px;cursor:pointer;font-family:var(--font);transition:var(--transition);letter-spacing:.3px}
+.region-btn:hover{color:#fff}
+.region-btn.active{background:var(--accent);color:#fff}
 
 .channel-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(265px,1fr));gap:10px}
 .channel-card{display:flex;align-items:center;gap:12px;padding:12px 13px;background:var(--surface);border:1px solid var(--border);border-radius:10px;cursor:pointer;transition:var(--transition);position:relative;overflow:hidden}
@@ -251,6 +256,8 @@ html,body{height:100%;font-family:var(--font);background:var(--bg-0);color:var(-
 .filter-pill:hover{border-color:rgba(229,9,20,.5);color:#fff;background:rgba(229,9,20,.1);transform:translateY(-1px)}
 .filter-pill.active{background:var(--accent);border-color:transparent;color:#fff}
 .filter-pill.active i,.filter-pill.active .fab{color:#fff}
+/* F8b — rótulo de seção/faceta entre pills (Destaque | Coleções | Plataformas) */
+.pill-section{flex:0 0 auto;align-self:center;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-3);font-weight:700;white-space:nowrap;padding:0 4px 0 10px;opacity:.75;font-family:var(--font)}
 .filter-pills-scroll{flex-wrap:wrap;overflow-x:hidden;overflow-y:auto;max-height:140px;padding-right:4px;-webkit-mask-image:none;mask-image:none}
 .fav-tabs,.section-tabs{display:flex;gap:9px;margin-bottom:16px;flex-wrap:wrap}
 .fav-tab,.section-tab{padding:9px 20px;border-radius:8px;background:var(--surface);border:1px solid var(--border);color:var(--text-2);font-size:12px;font-weight:600;cursor:pointer;transition:var(--transition);white-space:nowrap;font-family:var(--font);display:inline-flex;align-items:center;gap:7px}
@@ -289,6 +296,8 @@ html,body{height:100%;font-family:var(--font);background:var(--bg-0);color:var(-
 .meta-badge.star .meta-src{font-size:8.5px;font-weight:800;letter-spacing:.8px;color:var(--accent-soft);margin-left:2px}
 .meta-badge.quality{background:rgba(229,9,20,.16);border-color:rgba(229,9,20,.3);color:#ff8f98;font-weight:800;letter-spacing:.5px}
 .meta-badge.movietype,.meta-badge.seriestype{color:#ffd48f}
+.meta-badge.lang{background:rgba(122,162,255,.14);border-color:rgba(122,162,255,.3);color:#a9c0ff;font-weight:700}
+.meta-badge.lang i{color:#a9c0ff}
 .detail-actions{display:flex;gap:10px;flex-wrap:wrap}
 .btn-watch{padding:13px 28px;border:none;border-radius:8px;font-size:13.5px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:10px;transition:var(--transition);font-family:var(--font)}
 .btn-watch.primary{background:#fff;color:#0a0a0d}
@@ -305,6 +314,31 @@ html,body{height:100%;font-family:var(--font);background:var(--bg-0);color:var(-
 .detail-people{font-size:12.5px;color:var(--text-3);margin-top:10px;line-height:1.6}
 .detail-people strong{color:var(--text-2);font-weight:700}
 .detail-seasons-body{padding-top:0}
+
+/* F6 — seletor de versões de idioma no detail modal */
+.detail-versions{margin-bottom:16px}
+.detail-versions-title{font-size:11px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--text-3);margin-bottom:9px;display:flex;align-items:center;gap:7px}
+.detail-versions-title i{color:var(--accent-soft);font-size:11px}
+.version-list{display:flex;gap:8px;flex-wrap:wrap}
+.version-btn{display:inline-flex;align-items:center;gap:8px;padding:8px 15px;border-radius:8px;background:var(--surface);border:1px solid var(--border);color:var(--text-2);font-size:12px;font-weight:700;cursor:pointer;transition:var(--transition);font-family:var(--font)}
+.version-btn:hover{border-color:rgba(229,9,20,.5);color:#fff}
+.version-btn.active{background:var(--accent);border-color:transparent;color:#fff}
+.version-btn i{font-size:11px;opacity:.85}
+.version-btn.active i{opacity:1}
+.version-prov{font-size:9.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;opacity:.65}
+
+/* F9 — seção Legendas no detail modal */
+.detail-subs{margin-bottom:16px}
+.detail-subs-title{font-size:11px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--text-3);margin-bottom:9px;display:flex;align-items:center;gap:7px}
+.detail-subs-title i{color:var(--accent-soft);font-size:11px}
+.subs-row{display:flex;gap:8px;flex-wrap:wrap}
+.subs-select{max-width:340px;width:100%;padding:9px 12px;border-radius:8px;background:var(--surface);border:1px solid var(--border);color:var(--text-2);font-size:12px;font-weight:700;font-family:var(--font);cursor:pointer;transition:var(--transition)}
+.subs-select:hover{border-color:rgba(229,9,20,.5)}
+.subs-select:focus{outline:none;border-color:var(--accent-soft)}
+.subs-note{margin-top:8px;font-size:12px;color:var(--text-3);line-height:1.5}
+.subs-local-btn{display:inline-flex;align-items:center;gap:8px;margin-top:10px;padding:8px 15px;border-radius:8px;background:var(--surface);border:1px solid var(--border);color:var(--text-2);font-size:12px;font-weight:700;cursor:pointer;transition:var(--transition);font-family:var(--font)}
+.subs-local-btn:hover{border-color:rgba(229,9,20,.5);color:#fff}
+.subs-local-btn i{font-size:11px;opacity:.85}
 
 /* seasons pills */
 .seasons-pills{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}

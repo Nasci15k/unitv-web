@@ -113,7 +113,13 @@
                         <div class="live-main">
                     <div id="live-stage" class="live-stage hidden"></div>
                             <div class="live-header">
-                                <div class="live-header-title"><span id="live-cat-current">Todos os Canais</span><span class="count-chip" id="live-count"></span></div>
+                                <div class="live-header-row">
+                                    <div class="live-header-title"><span id="live-cat-current">Todos os Canais</span><span class="count-chip" id="live-count"></span></div>
+                                    <div class="region-toggle" id="region-toggle" role="group" aria-label="Filtro de idioma dos canais">
+                                        <button class="region-btn" data-region="br" type="button">BR</button>
+                                        <button class="region-btn" data-region="global" type="button">Global</button>
+                                    </div>
+                                </div>
                                 <div class="live-header-sub" id="live-cat-sub">Sinal ao vivo</div>
                             </div>
                             <div id="live-epg-bar" class="live-epg-bar hidden">
@@ -152,7 +158,7 @@
                             <button class="btn-open-filter" id="btn-open-filter"><i class="fas fa-filter"></i> Filtrar</button>
                             <button class="filter-mode active" data-mode="todos">Todos</button>
                             <button class="filter-mode" data-mode="streaming">Streaming</button>
-                            <button class="filter-mode" data-mode="genero">Gênero</button>
+                            <button class="filter-mode" data-mode="genero">Gênero</button><button class="filter-mode" data-mode="idioma">Idioma</button>
                             <button class="filter-mode" data-mode="ano">Ano</button>
                             <button class="filter-mode" data-mode="cinema">Cinema</button>
                         </div>
@@ -171,7 +177,7 @@
                             <button class="btn-open-filter" id="btn-open-filter-series"><i class="fas fa-filter"></i> Filtrar</button>
                             <button class="filter-mode active" data-mode="todos">Todos</button>
                             <button class="filter-mode" data-mode="streaming">Streaming</button>
-                            <button class="filter-mode" data-mode="genero">Gênero</button>
+                            <button class="filter-mode" data-mode="genero">Gênero</button><button class="filter-mode" data-mode="idioma">Idioma</button>
                             <button class="filter-mode" data-mode="ano">Ano</button>
                         </div>
                     </div>

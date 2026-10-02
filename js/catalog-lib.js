@@ -17,7 +17,8 @@
 
     // Chave de dedup: minúsculas, sem acento, sem ano entre ()/[], sem
     // marcadores de qualidade, sem pontuação. "Rocky II" ≠ "Rocky III";
-    // "Titanic (1997) 1080p DUB" → "titanic".
+    // "Titanic (1997) 1080p DUB" → "titanic". Conectivos "e"/"and"/"&" são
+    // descartados ("Tango e Cash" ≡ "Tango & Cash" ≡ "Tango Cash").
     function normName(s) {
         return stripDiacritics(s)
             .toLowerCase()
@@ -25,6 +26,8 @@
             .replace(/[[(]\s*(?:18|19|20)\d{2}\s*[)\]]/g, ' ')
             .replace(/(\p{L})(\d{3,4}p\b)/gu, '$1 $2') // "DUB1080p" → "dub 1080p"
             .replace(/\b(1080p|720p|2160p|4k|fhd|hdrip|hd|sd|bluray|bdrip|web-?dl|hdcam|cam|dublado|dub|legendado|leg|multi|full|h264|h265|hevc|avc|mpeg4|mux)\b/g, ' ')
+            .replace(/&/g, ' ')
+            .replace(/\s+(e|and)\s+/g, ' ')
             .replace(/[^\p{L}\p{N}]+/gu, ' ')
             .replace(/\s+/g, ' ')
             .trim();
@@ -85,6 +88,49 @@
         const rb = ratingOf(b);
         if (ra && rb && Math.abs(ra - rb) <= 0.2) return true;
         return false;
+    }
+
+    // ---------- variantes de idioma (F6) ----------
+    // Detecta a variante de idioma de um título a partir das tags IPTV comuns.
+    // '' = sem tag explícita (wildcard: casa com qualquer variante no dedup).
+    function detectLanguage(name) {
+        const lower = stripDiacritics(name).toLowerCase();
+        const bracket = lower.match(/\[([a-z0-9 ]{1,10})\]/);
+        if (bracket) {
+            const t = bracket[1].trim();
+            if (t === 'l' || t === 'leg' || t === 'legendado') return 'leg';
+            if (t === 'dub' || t === 'pt' || t === 'dublado') return 'dub';
+            if (t === 'multi' || t === 'dual') return 'multi';
+        }
+        const s = ' ' + lower
+            .replace(/(\p{L})(\d{3,4}p\b)/gu, '$1 $2') // "DUB1080p" → "dub 1080p"
+            .replace(/[\[\]()]/g, ' ').replace(/\s+/g, ' ') + ' ';
+        if (/\b(multi|dual)[\s-]?(audio|audios|idioma|idiomas|lingua|linguas|lang|sub|subs)\b/.test(s)) return 'multi';
+        if (/\b(dublado|dublada|dub)\b/.test(s)) return 'dub';
+        if (/\b(legendado|legendada|leg)\b/.test(s)) return 'leg';
+        return '';
+    }
+
+    // Chave de variante: normName + idioma. Mesma chave = mesma versão (só
+    // qualidade/arquivo difere); chave diferente = versão de idioma distinta.
+    function variantKey(name) {
+        return normName(name) + '\u0001' + detectLanguage(name);
+    }
+
+    // Prioridade do líder no agrupamento (público BR): dublado > multi >
+    // legendado > original sem tag.
+    const LANG_RANK = { dub: 4, multi: 3, leg: 2, '': 1 };
+
+    function langRank(name) {
+        const r = LANG_RANK[detectLanguage(name)];
+        return r == null ? 1 : r;
+    }
+
+    function langLabel(tag) {
+        if (tag === 'dub') return 'Dublado (PT)';
+        if (tag === 'leg') return 'Legendado';
+        if (tag === 'multi') return 'Multi-audio';
+        return 'Original';
     }
 
     // ---------- categorias ----------
@@ -226,6 +272,11 @@
         normPoster,
         ratingOf,
         isSameWork,
+        detectLanguage,
+        variantKey,
+        LANG_RANK,
+        langRank,
+        langLabel,
         normCat,
         kwOf,
         canonCat,

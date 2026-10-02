@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node proxy.js",
     "server": "node proxy.js",
-    "test": "node --check js/api.js && node --check js/player.js && node --check js/app.js && node --check js/supabase-client.js && node --check js/catalog-lib.js && node --check js/providers.js && node --check js/admin.js && node --check js/settings.js && node --check js/i18n.js && node --check js/subtitles.js && node --check js/image-guard.js && node --check netlify/edge-functions/xapi.js && node --check netlify/edge-functions/xstr.js && node --check netlify/functions/catalog-index.js && node --check netlify/functions/workers-background.js && node --check scripts/run-index.js && node --check scripts/test-merge.js"
+    "test": "node --check js/api.js && node --check js/player.js && node --check js/app.js && node --check js/supabase-client.js && node --check js/catalog-lib.js && node --check js/providers.js && node --check js/admin.js && node --check js/settings.js && node --check js/i18n.js && node --check js/subtitles.js && node --check js/image-guard.js && node --check netlify/edge-functions/xapi.js && node --check netlify/edge-functions/xstr.js && node --check netlify/functions/catalog-index.js && node --check netlify/functions/workers-background.js && node --check scripts/run-index.js && node --check scripts/test-merge.js && node --check scripts/test-subs.js"
   },
   "keywords": ["iptv", "player", "xtream", "supabase", "netlify"],
   "license": "MIT",

@@ -212,16 +212,17 @@ class XtreamAPI {
         const { pid, raw } = this._splitId(id);
         return this.fetch(this.getApiUrl('get_vod_info', { vod_id: raw }, pid), undefined, pid ? 20000 : undefined);
     }
+    // F9 — parse puro de legendas a partir de um get_vod_info já carregado.
+    parseSubtitles(data) {
+        const raw = (data && data.info && data.info.subtitles) || (data && data.movie_data && data.movie_data.subtitles) || (data && data.subtitles) || [];
+        const list = Array.isArray(raw) ? raw : (typeof raw === 'object' && raw ? Object.values(raw) : []);
+        return list.map(s => {
+            if (typeof s === 'string') return { url: s, lang: guessSubLang(s), label: guessSubLang(s).toUpperCase() };
+            return { url: s.url || s.src || s.file || '', lang: s.lang || s.language || guessSubLang(s.url || ''), label: s.label || s.name || (s.language || guessSubLang(s.url || '')).toUpperCase() };
+        }).filter(s => s.url);
+    }
     async getVodSubtitles(vodId) {
-        try {
-            const data = await this.getVodInfo(vodId);
-            const raw = (data && data.info && data.info.subtitles) || (data && data.movie_data && data.movie_data.subtitles) || (data && data.subtitles) || [];
-            const list = Array.isArray(raw) ? raw : (typeof raw === 'object' && raw ? Object.values(raw) : []);
-            return list.map(s => {
-                if (typeof s === 'string') return { url: s, lang: guessSubLang(s), label: guessSubLang(s).toUpperCase() };
-                return { url: s.url || s.src || s.file || '', lang: s.lang || s.language || guessSubLang(s.url || ''), label: s.label || s.name || (s.language || guessSubLang(s.url || '')).toUpperCase() };
-            }).filter(s => s.url);
-        } catch (e) { return []; }
+        try { return this.parseSubtitles(await this.getVodInfo(vodId)); } catch (e) { return []; }
     }
     async getSeriesCategories(pid) { return this.fetch(this.getApiUrl('get_series_categories', {}, pid), undefined, pid ? 30000 : undefined); }
     async getSeries(catId, pid) { return this.fetch(this.getApiUrl('get_series', catId ? { category_id: catId } : {}, pid), undefined, pid ? _CATALOG_TIMEOUT : undefined); }

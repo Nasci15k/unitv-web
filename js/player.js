@@ -1479,12 +1479,20 @@ class VideoPlayer {
             this.subtitleOptions.innerHTML = '<div class="settings-option-text">Nenhuma legenda disponivel</div>';
             return;
         }
-        let html = '<div class="settings-option active" data-subtitle-track="-1"><span class="settings-option-label">Desligado</span></div>';
+        let activeIdx = -1;
         let idx = 0;
         for (let i = 0; i < tracks.length; i++) {
             if (tracks[i].kind === 'subtitles' || tracks[i].kind === 'captions') {
+                if (tracks[i].mode === 'showing') activeIdx = idx;
+                idx++;
+            }
+        }
+        let html = '<div class="settings-option' + (activeIdx === -1 ? ' active' : '') + '" data-subtitle-track="-1"><span class="settings-option-label">Desligado</span></div>';
+        idx = 0;
+        for (let i = 0; i < tracks.length; i++) {
+            if (tracks[i].kind === 'subtitles' || tracks[i].kind === 'captions') {
                 const trackIdx = idx;
-                html += '<div class="settings-option" data-subtitle-track="' + trackIdx + '"><span class="settings-option-label">' + (tracks[i].label || tracks[i].language || 'Legenda ' + (trackIdx + 1)) + '</span></div>';
+                html += '<div class="settings-option' + (trackIdx === activeIdx ? ' active' : '') + '" data-subtitle-track="' + trackIdx + '"><span class="settings-option-label">' + (tracks[i].label || tracks[i].language || 'Legenda ' + (trackIdx + 1)) + '</span></div>';
                 idx++;
             }
         }

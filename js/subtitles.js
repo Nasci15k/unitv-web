@@ -1,13 +1,22 @@
 /* UnitV SubtitleStore — loads VOD subtitles (movie/series) as <track> */
 window.SubtitleStore = (function () {
     const LANG_KEY = 'unitv_sub_lang';
+    const ON_KEY = 'unitv_sub_on';
     let list = [];
+    let pendingLocal = null;
 
     function getPrefLang() {
         try { return localStorage.getItem(LANG_KEY) || 'pt'; } catch (e) { return 'pt'; }
     }
     function setPrefLang(l) {
         try { localStorage.setItem(LANG_KEY, l || 'pt'); } catch (e) {}
+    }
+    // F9 — ligar/desligar legendas globalmente ('0' = desligado; ausente = ligado).
+    function isOn() {
+        try { return localStorage.getItem(ON_KEY) !== '0'; } catch (e) { return true; }
+    }
+    function setOn(on) {
+        try { localStorage.setItem(ON_KEY, on === false ? '0' : '1'); } catch (e) {}
     }
 
     function isVtt(text) { return /^\s*(\uFEFF)?WEBVTT/.test(String(text || '')); }
@@ -34,13 +43,14 @@ window.SubtitleStore = (function () {
 
     function applyPref(videoEl) {
         if (!videoEl) return;
+        const on = isOn();
         const pref = String(getPrefLang() || '').toLowerCase();
         const tt = videoEl.textTracks;
         let matched = false;
         for (let i = 0; i < tt.length; i++) {
             if (tt[i].kind !== 'subtitles' && tt[i].kind !== 'captions') continue;
             const lang = String(tt[i].language || '').toLowerCase();
-            const match = !matched && pref && lang && (lang === pref || lang.indexOf(pref) === 0 || pref.indexOf(lang) === 0);
+            const match = on && !matched && pref && lang && (lang === pref || lang.indexOf(pref) === 0 || pref.indexOf(lang) === 0);
             if (match) { tt[i].mode = 'showing'; matched = true; }
             else tt[i].mode = 'hidden';
         }
@@ -62,7 +72,8 @@ window.SubtitleStore = (function () {
         clearTracks(videoEl);
         list = [];
         try {
-            if (window.api && typeof api.getVodSubtitles === 'function') {
+            // `api` é binding léxico de script clássico (não existe em window.api).
+            if (typeof api !== 'undefined' && api && typeof api.getVodSubtitles === 'function') {
                 list = await api.getVodSubtitles(vodId) || [];
             }
         } catch (e) { list = []; }
@@ -83,12 +94,16 @@ window.SubtitleStore = (function () {
                 try { appendTrack(videoEl, s.url, s.lang, s.label); } catch (e2) {}
             }
         }
+        // F9 — legenda local escolhida no detail modal entra aqui.
+        if (pendingLocal && pendingLocal.text) {
+            try { appendTrack(videoEl, URL.createObjectURL(new Blob([pendingLocal.text], { type: 'text/vtt' })), getPrefLang(), pendingLocal.name); } catch (e) {}
+        }
         applyPref(videoEl);
         return list;
     }
 
     function loadLocalFile(file, videoEl) {
-        if (!file || !videoEl) return Promise.resolve(null);
+        if (!file) return Promise.resolve(null);
         const reader = new FileReader();
         return new Promise((resolve) => {
             reader.onload = () => {
@@ -96,6 +111,13 @@ window.SubtitleStore = (function () {
                     let text = String(reader.result || '');
                     if (!isVtt(text)) text = srtToVtt(text);
                     const name = (file.name || 'Local').replace(/\.[^.]+$/, '');
+                    // F9 — sem vídeo (detail modal): guarda p/ aplicar na próxima reprodução.
+                    if (!videoEl) {
+                        pendingLocal = { text: text, name: name };
+                        if (window.showToast) window.showToast('Legenda local pronta — será exibida na reprodução', 'success');
+                        resolve(pendingLocal);
+                        return;
+                    }
                     const t = appendTrack(videoEl, URL.createObjectURL(new Blob([text], { type: 'text/vtt' })), getPrefLang(), name);
                     if (t) { const tt = videoEl.textTracks; for (let i = 0; i < tt.length; i++) tt[i].mode = (tt[i].kind === 'subtitles' || tt[i].kind === 'captions') ? (tt[i] === t.textTrack ? 'showing' : 'hidden') : tt[i].mode; }
                     resolve(t);
@@ -116,5 +138,10 @@ window.SubtitleStore = (function () {
         input.click();
     }
 
-    return { loadForVod, clearTracks, loadLocalFile, createLocalInput, getPrefLang, setPrefLang, getList: () => list, srtToVtt };
+    return {
+        loadForVod, clearTracks, loadLocalFile, createLocalInput, applyPref,
+        getPrefLang, setPrefLang, isOn, setOn,
+        getList: () => list, srtToVtt,
+        getPendingLocal: () => pendingLocal, clearPendingLocal: () => { pendingLocal = null; }
+    };
 })();
