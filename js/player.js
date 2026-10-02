@@ -780,7 +780,7 @@ if (hevcUnsupported && /hvc1|hev1|MediaMSEError/i.test(msg + errDetail)) {
             return;
         }
 
-        const mpegtsOk = typeof mpegts !== 'undefined' && mpegts.isSupported();
+const mpegtsOk = typeof mpegts !== 'undefined' && mpegts.isSupported();
         _plog('[VIDEO] recover mpegtsOk=', mpegtsOk, 'tried=', this._vodMpegtsTried);
         if ((fmt === 'ts' || fmt === 'unknown' || fmt === 'unknown-nocors' || fmt === 'unknown-cors') && mpegtsOk && !this._vodMpegtsTried) {
             this._vodMpegtsTried = true;
@@ -790,7 +790,8 @@ if (hevcUnsupported && /hvc1|hev1|MediaMSEError/i.test(msg + errDetail)) {
                 if (this.videoEl && this.videoEl.readyState < 2 && this.currentUrl === url) {
                     this.destroyMpegts();
                     if (fmt === 'ts' || fmt === 'unknown-nocors') {
-                        this.showErrorMessage('Stream TS sem CORS ou nao suportado pelo navegador.');
+                        // Erro mais específico para 403/401 (token expirado)
+                        this.showErrorMessage('Falha ao carregar stream (403/401). Tente novamente ou verifique se a conta tem acesso a este conteúdo.');
                     } else {
                         this.playVideoMSE(url);
                     }
@@ -1302,7 +1303,7 @@ if (hevcUnsupported && /hvc1|hev1|MediaMSEError/i.test(msg + errDetail)) {
     // Canal HEVC sem suporte no navegador: pede pro app trocar pela versao H.264 do canal
     _hevcFallback() {
         try {
-            window.dispatchEvent(new CustomEvent('opentv:hevc-fallback', { detail: { streamId: String(this.currentStreamId || ''), title: this.currentTitle || '' } }));
+            window.dispatchEvent(new CustomEvent('opentv:hevc-fallback', { detail: { streamId: String(this.currentStreamId || ''), title: this.currentTitle || '', type: this.currentType || 'live' } }));
         } catch (e) {}
     }
 

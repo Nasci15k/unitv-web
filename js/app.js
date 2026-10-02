@@ -918,14 +918,25 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast(d.msg || '', d.type === 'error' ? 'error' : 'success');
     });
 
-    // ===== HEVC: troca automatica pela versao H.264 do canal =====
-    function findH264Twin(streamId, title) {
+    // ===== HEVC: troca automatica pela versao H.264 (live) ou variante compatível (VOD) =====
+    function findH264Twin(streamId, title, type) {
         const norm = (n) => String(n || '').toLowerCase()
             .replace(/h\.?\s*265|hevc|x265|\.h265/g, '')
             .replace(/\s{2,}/g, ' ').trim();
         const base = norm(title);
         if (!base) return null;
-        const cands = state.allLive.filter(s => String(s.stream_id) !== String(streamId) &&
+
+        // escolhe lista candidata conforme tipo
+        let cands = [];
+        if (type === 'movie' || type === 'vod') {
+            cands = state.allMovies;
+        } else if (type === 'series') {
+            cands = state.allSeries;
+        } else {
+            cands = state.allLive;
+        }
+
+        cands = cands.filter(s => String(s.stream_id) !== String(streamId) &&
             !ContentFilter.isAdult(s.name || '') &&
             !/h\.?\s*265|hevc|x265/i.test(s.name || ''));
         let twin = cands.find(s => norm(s.name) === base);
@@ -935,15 +946,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     window.addEventListener('opentv:hevc-fallback', (e) => {
         const d = e.detail || {};
+        const type = d.type || 'live';
         setTimeout(() => {
-            const twin = findH264Twin(d.streamId, d.title);
+            const twin = findH264Twin(d.streamId, d.title, type);
             if (twin) {
-                showToast('Canal HEVC sem suporte — abrindo versão compatível: ' + twin.name, 'success');
-                WatchStore.record('live', twin.stream_id, twin.name);
-                player.play(api.getStreamUrl('live', twin.stream_id), twin.name, 'live', { streamId: twin.stream_id });
-                loadEpgForChannel(twin.stream_id);
+                const isLive = type === 'live';
+                showToast((isLive ? 'Canal' : 'Vídeo') + ' HEVC sem suporte — abrindo versão compatível: ' + twin.name, 'success');
+                WatchStore.record(isLive ? 'live' : type, twin.stream_id, twin.name);
+                player.play(api.getStreamUrl(isLive ? 'live' : type, twin.stream_id), twin.name, type, { streamId: twin.stream_id });
+                if (isLive) loadEpgForChannel(twin.stream_id);
             } else {
-                showToast('Este canal é só HEVC e seu navegador não suporta. Instale as extensões "HEVC Video Extensions" ou use outro canal.', 'error');
+                showToast('Este conteúdo é só HEVC e seu navegador não suporta. Instale as extensões "HEVC Video Extensions" ou use outro.', 'error');
             }
         }, 700);
     });
