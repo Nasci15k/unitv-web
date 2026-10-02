@@ -449,13 +449,16 @@ html,body{height:100%;font-family:var(--font);background:var(--bg-0);color:var(-
 .brand-tag-img {
     display: inline-block;
     vertical-align: middle;
-    height: auto;
-    width: auto;
-    object-fit: contain;
+    height: 1.25em;
+    aspect-ratio: 1;
+    object-fit: cover;
+    object-position: center;
+    border-radius: 4px;
+    flex-shrink: 0;
 }
 
 .auth-gate-brand-img {
-    height: 1.2em;
+    height: 1.15em;
     margin-top: 2px;
 }
 
@@ -469,27 +472,27 @@ html,body{height:100%;font-family:var(--font);background:var(--bg-0);color:var(-
 .adm-brand-img {
     height: 1.1em;
     margin-top: 1px;
-    opacity: .8;
+    opacity: .9;
 }
 
 .lp-brand-img {
-    height: 1.1em;
+    height: 1.15em;
     margin-top: 2px;
 }
 
 .login-brand-img {
-    height: 1em;
-    margin-top: 2px;
+    height: 1.1em;
+    margin-top: 1px;
 }
 
 .plans-brand-img {
-    height: 1em;
+    height: 1.1em;
     margin-top: 2px;
     text-align: center;
 }
 
 .brand-tag-img {
-    height: 0.9em;
+    height: 1em;
     vertical-align: middle;
 }
 
@@ -510,6 +513,7 @@ html,body{height:100%;font-family:var(--font);background:var(--bg-0);color:var(-
 .auth-gate-brand { margin-top: 4px; text-align: center }
 .sidebar-brand { margin-left: 10px; padding-left: 10px; border-left: 1px solid rgba(255,255,255,.15); font-size: 9px }
 .adm-brand { margin-top: 2px; font-size: 9px; opacity: .7 }
+.lp-brand { margin-top: 4px; font-size: 11px }
 .login-brand { display: block; margin-top: 6px; font-size: 10px; text-align: center }
 .plans-brand { margin-top: 4px; font-size: 11px; text-align: center }
 .brand-tag { font-size: 11px; color: var(--accent-soft); font-weight: 700; vertical-align: middle }
