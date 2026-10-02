@@ -47,10 +47,15 @@ html,body{height:100%;font-family:var(--font);background:var(--bg-0);color:var(-
 /* ============ TOP NAVBAR (desktop) / DRAWER (mobile) ============ */
 #app{position:relative;z-index:1;height:100vh;display:flex}
 .sidebar{position:fixed;top:0;left:0;right:0;height:var(--nav-h);background:linear-gradient(180deg,rgba(15,15,17,.96),rgba(15,15,17,.88));backdrop-filter:blur(24px) saturate(1.4);border-bottom:1px solid var(--border);display:flex;flex-direction:row;align-items:center;gap:8px;padding:0 var(--content-px);z-index:100;transition:transform .3s cubic-bezier(.4,0,.2,1)}
-.sidebar-logo{display:flex;align-items:center;gap:10px;padding:0;margin-right:6px;flex-shrink:0}
+.sidebar-logo{display:flex;align-items:center;gap:4px;padding:0;margin-right:6px;flex-shrink:0}
 .sidebar-logo svg{filter:drop-shadow(0 0 14px rgba(229,9,20,.4))}
 .sidebar-logo span{font-size:21px;font-weight:900;letter-spacing:-.8px;color:#fff}
 .sidebar-logo span span{color:var(--accent)}
+.sidebar-logo .sidebar-brand-img{
+    margin-left: 4px;
+    padding-left: 8px;
+    border-left: 3px solid #fff;
+}
 .nav-menu{list-style:none;display:flex;flex-direction:row;align-items:center;gap:2px;padding:0;margin-left:8px;overflow-x:auto;scrollbar-width:none;flex:0 1 auto}
 .nav-menu::-webkit-scrollbar{display:none}
 .nav-group-label{display:none}
