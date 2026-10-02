@@ -51,11 +51,6 @@ html,body{height:100%;font-family:var(--font);background:var(--bg-0);color:var(-
 .sidebar-logo svg{filter:drop-shadow(0 0 14px rgba(229,9,20,.4))}
 .sidebar-logo span{font-size:21px;font-weight:900;letter-spacing:-.8px;color:#fff}
 .sidebar-logo span span{color:var(--accent)}
-.sidebar-logo .sidebar-brand-img{
-    margin-left: 4px;
-    padding-left: 8px;
-    border-left: 3px solid #fff;
-}
 .nav-menu{list-style:none;display:flex;flex-direction:row;align-items:center;gap:2px;padding:0;margin-left:8px;overflow-x:auto;scrollbar-width:none;flex:0 1 auto}
 .nav-menu::-webkit-scrollbar{display:none}
 .nav-group-label{display:none}
@@ -445,66 +440,21 @@ html,body{height:100%;font-family:var(--font);background:var(--bg-0);color:var(-
 .settings-option-title{font-size:10px;text-transform:uppercase;color:var(--text-3);font-weight:800;letter-spacing:.9px;margin:12px 0 6px;display:block}
 
 /* ICN Group branding - imagens */
-.auth-gate-brand-img,
-.sidebar-brand-img,
-.adm-brand-img,
-.lp-brand-img,
-.login-brand-img,
-.plans-brand-img,
-.brand-tag-img {
-    display: inline-block;
-    vertical-align: middle;
-    height: 8.8em;
-    aspect-ratio: 1;
-    object-fit: cover;
-    object-position: center;
-    border-radius: 4px;
-    flex-shrink: 0;
-    /* Zoom 3x para cortar espaço transparente da imagem original */
-    transform: scale(3);
-    transform-origin: center;
-}
+/* Logo branca em fundo escuro: a imagem original é quadrada com o logo na
+   banda central (~15% da altura). aspect-ratio 6:1 + object-fit:cover recorta
+   essa banda central em qualquer navegador — logo preenche a caixa, sem
+   transform (nada transborda para fora da área da logo). */
+.auth-gate-brand-img,.sidebar-brand-img,.adm-brand-img,.lp-brand-img,.login-brand-img,.plans-brand-img,.brand-tag-img{
+    display:inline-block;vertical-align:middle;height:21px;aspect-ratio:6;object-fit:cover;object-position:center;border-radius:3px;flex-shrink:0}
+.auth-gate-brand-img{height:24px;margin-top:2px}
+.sidebar-brand-img{height:21px;margin-left:6px;padding-left:6px;border-left:3px solid #fff}
+.adm-brand-img{height:20px;opacity:.9}
+.lp-brand-img{height:21px}
+.login-brand-img{height:24px}
+.plans-brand-img{height:24px}
+.brand-tag-img{height:16px;vertical-align:middle}
 
-.auth-gate-brand-img {
-    height: 8.8em;
-    margin-top: 2px;
-}
-
-.sidebar-brand-img {
-    height: 8.8em;
-    margin-left: 12px;
-    padding-left: 12px;
-    border-left: 1px solid rgba(255,255,255,.15);
-}
-
-.adm-brand-img {
-    height: 8.8em;
-    margin-top: 1px;
-    opacity: .9;
-}
-
-.lp-brand-img {
-    height: 8.8em;
-    margin-top: 2px;
-}
-
-.login-brand-img {
-    height: 8.8em;
-    margin-top: 1px;
-}
-
-.plans-brand-img {
-    height: 8.8em;
-    margin-top: 2px;
-    text-align: center;
-}
-
-.brand-tag-img {
-    height: 6em;
-    vertical-align: middle;
-}
-
-/* Legacy text branding fallback */
+/* Fallback texto (se a imagem falhar) */
 .auth-gate-brand,
 .sidebar-brand,
 .adm-brand,
