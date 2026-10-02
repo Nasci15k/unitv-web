@@ -449,7 +449,7 @@ html,body{height:100%;font-family:var(--font);background:var(--bg-0);color:var(-
 .brand-tag-img {
     display: inline-block;
     vertical-align: middle;
-    height: 2.5em;
+    height: 10em;
     aspect-ratio: 1;
     object-fit: cover;
     object-position: center;
@@ -458,41 +458,41 @@ html,body{height:100%;font-family:var(--font);background:var(--bg-0);color:var(-
 }
 
 .auth-gate-brand-img {
-    height: 2.2em;
+    height: 8.8em;
     margin-top: 2px;
 }
 
 .sidebar-brand-img {
-    height: 2.2em;
+    height: 8.8em;
     margin-left: 12px;
     padding-left: 12px;
     border-left: 1px solid rgba(255,255,255,.15);
 }
 
 .adm-brand-img {
-    height: 2.2em;
+    height: 8.8em;
     margin-top: 1px;
     opacity: .9;
 }
 
 .lp-brand-img {
-    height: 2.2em;
+    height: 8.8em;
     margin-top: 2px;
 }
 
 .login-brand-img {
-    height: 2.2em;
+    height: 8.8em;
     margin-top: 1px;
 }
 
 .plans-brand-img {
-    height: 2.2em;
+    height: 8.8em;
     margin-top: 2px;
     text-align: center;
 }
 
 .brand-tag-img {
-    height: 1.5em;
+    height: 6em;
     vertical-align: middle;
 }
 
