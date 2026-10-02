@@ -948,6 +948,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 700);
     });
 
+    // Troca de qualidade/provedor enquanto o canal reproduz
+    window.addEventListener('opentv:switch-variant', (e) => {
+        const d = e.detail || {};
+        const sid = d.streamId;
+        if (!sid) return;
+        const variants = d.variants || [];
+        // busca o canal atual para pegar nome/EPG
+        const cur = state.allLive.find(x => String(x.stream_id) === String(sid));
+        const name = cur ? (cur.name || cur.title) : 'Canal';
+        showToast('Trocando para ' + name, 'success');
+        WatchStore.record('live', sid, name);
+        player.play(api.getStreamUrl('live', sid), name, 'live', { streamId: sid, variants: variants });
+        loadEpgForChannel(sid);
+    });
+
     function pushCatalogStats() {
         if (!AuthStore.isAdmin()) return;
         try {
@@ -2045,16 +2060,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const dotTitle = srvSt === 'online' ? 'No ar' : srvSt === 'offline' ? 'Fora do ar' : 'Verificando...';
         card.innerHTML = '<span class="ch-number">#' + num + '</span><img class="ch-logo" src="' + logoSrc + '" loading="lazy" decoding="async" referrerpolicy="no-referrer" alt="" onerror="this.onerror=null;this.src=\'assets/images/placeholder.svg\'"><div class="ch-info"><div class="ch-name">' + esc(window.CatalogLib ? CatalogLib.displayName(stream.name) : stream.name) + '</div><div class="ch-category">' + esc(cat) + '<span class="ch-epg-mini" data-epg-for="' + stream.stream_id + '"></span></div></div><button class="ch-guide" title="Programação"><i class="fas fa-list-ul"></i></button><div class="ch-status-dot ' + dotCls + '" title="' + dotTitle + '"></div>';
         card.addEventListener('click', () => {
-            const play = () => {
-                WatchStore.record('live', stream.stream_id, stream.name);
-                player.play(api.getStreamUrl('live', stream.stream_id), stream.name, 'live', { streamId: stream.stream_id });
-                loadEpgForChannel(stream.stream_id);
-            };
-            if (ContentFilter.isAdult(stream.name || stream.category_name || '') && !state.adultUnlocked) {
-                requirePin(() => { state.adultUnlocked = true; play(); });
-                return;
-            }
-            play();
+            playLiveWithVariants(stream);
         });
         card.querySelector('.ch-guide')?.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -2256,6 +2262,132 @@ document.addEventListener('DOMContentLoaded', () => {
             const v = list[Number(b.dataset.ver)];
             if (v && v !== item) opener(v);
         }));
+    }
+
+    // Rank de qualidade para canais (maior = melhor): 4K/UHD=4, FHD/1080=3, HD/720=2, SD=1, outros=0
+    function qualityRank(name) {
+        const n = String(name || '').toLowerCase();
+        if (/\b(2160p|4k|uhd|ultra hd)\b/.test(n)) return 4;
+        if (/\b(1080p|fhd|full hd)\b/.test(n)) return 3;
+        if (/\b(720p|hd)\b/.test(n)) return 2;
+        if (/\b(sd)\b/.test(n)) return 1;
+        return 0;
+    }
+
+    // Extrai label legível de qualidade do nome: "Band News FHD [H265]" -> "FHD (H265)"
+    function qualityLabel(name) {
+        const n = String(name || '');
+        const hevc = /h\.?\s*265|hevc|x265|\.h265/i.test(n);
+        let q = 'SD';
+        if (/\b(2160p|4k|uhd|ultra hd)\b/i.test(n)) q = '4K';
+        else if (/\b(1080p|fhd|full hd)\b/i.test(n)) q = 'FHD';
+        else if (/\b(720p|hd)\b/i.test(n)) q = 'HD';
+        else if (/\b(sd)\b/i.test(n)) q = 'SD';
+        return hevc ? q + ' (H265)' : q;
+    }
+
+    // Constrói lista de variantes para um canal ao vivo a partir de _altItems, _alts e mesmo normName
+    function buildLiveVariants(channel) {
+        if (!channel) return [];
+        const variants = [];
+        const seen = new Set();
+        const defaultId = (window.Providers && window.Providers.DEFAULT_ID) || 'telefunplay';
+        const norm = window.CatalogLib ? window.CatalogLib.normName(channel.name || channel.title) : null;
+
+        // 1) canal atual (o que foi clicado)
+        const currentId = channel.stream_id;
+        if (currentId != null) {
+            variants.push({
+                stream_id: currentId,
+                name: channel.name || channel.title,
+                provider: channel.provider || defaultId,
+                isCurrent: true
+            });
+            seen.add(String(currentId));
+        }
+
+        // 2) _altItems (objetos completos com qualidade/provider)
+        if (Array.isArray(channel._altItems)) {
+            for (const alt of channel._altItems) {
+                const sid = String(alt.stream_id);
+                if (!seen.has(sid)) {
+                    variants.push({
+                        stream_id: alt.stream_id,
+                        name: alt.name,
+                        provider: alt.provider || defaultId,
+                        isCurrent: false
+                    });
+                    seen.add(sid);
+                }
+            }
+        }
+
+        // 3) _alts (IDs brutos) — tentar resolver nome via state.allLive
+        if (Array.isArray(channel._alts)) {
+            for (const sid of channel._alts) {
+                const key = String(sid);
+                if (seen.has(key)) continue;
+                let found = null;
+                // procura no state.allLive (já namespaced)
+                if (Array.isArray(state.allLive)) {
+                    found = state.allLive.find(x => String(x.stream_id) === key);
+                }
+                variants.push({
+                    stream_id: sid,
+                    name: found ? (found.name || found.title) : 'Alternativa ' + key,
+                    provider: found ? (found.provider || defaultId) : defaultId,
+                    isCurrent: false
+                });
+                seen.add(key);
+            }
+        }
+
+        // 4) mesmas estações em outros provedores (mesmo normName) que NÃO estão em _alts/_altItems
+        if (norm && Array.isArray(state.allLive)) {
+            for (const other of state.allLive) {
+                const oid = String(other.stream_id);
+                if (seen.has(oid)) continue;
+                const onorm = window.CatalogLib ? window.CatalogLib.normName(other.name || other.title) : null;
+                if (onorm === norm) {
+                    variants.push({
+                        stream_id: other.stream_id,
+                        name: other.name || other.title,
+                        provider: other.provider || defaultId,
+                        isCurrent: false
+                    });
+                    seen.add(oid);
+                }
+            }
+        }
+
+        // Ordena: melhor qualidade primeiro (FHD>HD>SD), depois provedor padrão primeiro
+        variants.sort((a, b) => {
+            const qa = qualityRank(a.name);
+            const qb = qualityRank(b.name);
+            if (qb !== qa) return qb - qa;
+            const pa = a.provider === defaultId ? 0 : 1;
+            const pb = b.provider === defaultId ? 0 : 1;
+            return pa - pb;
+        });
+
+        return variants;
+    }
+
+    // Toca canal ao vivo com seletor de qualidade/provedor
+    function playLiveWithVariants(channel) {
+        if (!channel) return;
+        const variants = buildLiveVariants(channel);
+        if (!variants.length) return;
+        // padrão = primeiro da lista ordenada (melhor qualidade)
+        const best = variants[0];
+        const playOpts = { streamId: best.stream_id, variants: variants };
+        if (ContentFilter.isAdult(channel.name || channel.category_name || '') && !state.adultUnlocked) {
+            requirePin(() => { state.adultUnlocked = true; player.play(api.getStreamUrl('live', best.stream_id), channel.name, 'live', playOpts); });
+            return;
+        }
+        WatchStore.record('live', best.stream_id, channel.name);
+        player.play(api.getStreamUrl('live', best.stream_id), channel.name, 'live', playOpts);
+        loadEpgForChannel(best.stream_id);
     }
 
     // F9 — seção "Legendas" do detail modal (preferência global + legenda local).

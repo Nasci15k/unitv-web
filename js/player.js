@@ -203,6 +203,7 @@ class VideoPlayer {
         this._inMkvFallback = false;
         if (this._mkvMpegtsTimer) { clearTimeout(this._mkvMpegtsTimer); this._mkvMpegtsTimer = null; }
         this.currentStreamId = opts.streamId != null ? opts.streamId : null;
+        this.currentVariants = Array.isArray(opts.variants) ? opts.variants : [];
         this._liveStatusSent = false;
         this._restartCount = 0;
         this._lastLiveEngine = null;
@@ -466,7 +467,12 @@ class VideoPlayer {
 
             this.mpegtsPlayer.attachMediaElement(this.videoEl);
             this.mpegtsPlayer.load();
-            this.mpegtsPlayer.play();
+this.mpegtsPlayer.play();
+
+            // Preenche seletor de qualidade/provedor se houver variantes
+            if (this.isLive && this.currentVariants && this.currentVariants.length) {
+                this.populateStreamVariants();
+            }
 
             let hasPlayed = false;
             const onPlaying = () => {
@@ -487,10 +493,11 @@ class VideoPlayer {
                 const msg = JSON.stringify(errInfo || {});
                 const hevcUnsupported = /hvc1|hev1|MediaMSEError|addSourceBuffer/i.test(msg + errDetail) &&
                     !this._mpegtsHevcNotified;
-                if (hevcUnsupported && /hvc1|hev1|MediaMSEError/i.test(msg + errDetail)) {
+if (hevcUnsupported && /hvc1|hev1|MediaMSEError/i.test(msg + errDetail)) {
                     this._mpegtsHevcNotified = true;
                     this.destroyMpegts();
-                    this.showErrorMessage('Video HEVC (H.265) nao suportado por este navegador. Tente outro canal ou qualidade.');
+                    // tenta trocar automaticamente para variante H264 (igual HLS)
+                    this._hevcFallback();
                     return;
                 }
                 if (this._inMkvFallback) {
@@ -1538,7 +1545,47 @@ class VideoPlayer {
         if (!this.hls) {
             this.audioOptions.innerHTML = '<div class="settings-option active"><span class="settings-option-label">Padrao</span></div>';
         }
+this.qualityOptions.innerHTML = html;
+    }
+
+    // Preenche o painel de qualidade com variantes de canal (SD/HD/FHD/4K + provedor)
+    populateStreamVariants() {
+        if (!this.qualityOptions || !this.currentVariants || !this.currentVariants.length) return;
+        const currentId = this.currentStreamId;
+        const defaultId = (window.Providers && window.Providers.DEFAULT_ID) || 'telefunplay';
+        let html = '<div class="settings-option-title"><i class="fas fa-tv"></i> Qualidade / Fonte</div>';
+        this.currentVariants.forEach((v, idx) => {
+            const isActive = String(v.stream_id) === String(currentId);
+            const qLabel = this.qualityLabel ? this.qualityLabel(v.name) : v.name;
+            const prov = v.provider && v.provider !== defaultId ? v.provider : 'Padrão';
+            html += '<div class="settings-option' + (isActive ? ' active' : '') + '" data-variant-idx="' + idx + '">' +
+                '<span class="settings-option-label">' + qLabel + '</span>' +
+                '<span class="variant-provider">' + prov + '</span>' +
+                '</div>';
+        });
         this.qualityOptions.innerHTML = html;
+        this.qualityOptions.querySelectorAll('.settings-option[data-variant-idx]').forEach(el => {
+            el.addEventListener('click', () => {
+                const idx = parseInt(el.dataset.variantIdx, 10);
+                const variant = this.currentVariants[idx];
+                if (!variant) return;
+                // dispa evento para app.js trocar o stream
+                const ev = new CustomEvent('opentv:switch-variant', { detail: { streamId: variant.stream_id, variants: this.currentVariants } });
+                document.dispatchEvent(ev);
+            });
+        });
+    }
+
+    // Helper para label de qualidade (reutiliza lógica do app.js se disponível)
+    qualityLabel(name) {
+        const n = String(name || '');
+        const hevc = /h\.?\s*265|hevc|x265|\.h265/i.test(n);
+        let q = 'SD';
+        if (/\b(2160p|4k|uhd|ultra hd)\b/i.test(n)) q = '4K';
+        else if (/\b(1080p|fhd|full hd)\b/i.test(n)) q = 'FHD';
+        else if (/\b(720p|hd)\b/i.test(n)) q = 'HD';
+        else if (/\b(sd)\b/i.test(n)) q = 'SD';
+        return hevc ? q + ' (H265)' : q;
     }
 
     onSeekStart(e) {

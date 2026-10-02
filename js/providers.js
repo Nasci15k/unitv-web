@@ -202,19 +202,29 @@ window.Providers = (function () {
         return drop.size;
     }
 
+    // Rank de qualidade (maior = melhor): 4K/UHD=4, FHD/1080=3, HD/720=2, SD=1, outros=0
+    function qualityRank(name) {
+        const n = String(name || '').toLowerCase();
+        if (/\b(2160p|4k|uhd|ultra hd)\b/.test(n)) return 4;
+        if (/\b(1080p|fhd|full hd)\b/.test(n)) return 3;
+        if (/\b(720p|hd)\b/.test(n)) return 2;
+        if (/\b(sd)\b/.test(n)) return 1;
+        return 0;
+    }
+
     // Canais extremamente idênticos (mesma estação com variação de
     // qualidade/codec no nome: "Globo HD" x "Globo H265" x "Globo 4K").
     // normName já remove qualidade/colchetes → mesma chave = mesma estação.
-    // Vencedor = nome mais limpo + logo + EPG (melhor exibição); perdedores
-    // viram _alts (URLs preservadas p/ failover futuro). Pôster NÃO decide
-    // aqui: a mesma estação legítima tem logos diferentes por fonte.
+    // Vencedor = melhor qualidade (FHD>HD>SD) + nome limpo + logo + EPG;
+    // perdedores viram _alts (IDs) e _altItems (objetos completos p/ UI).
     // Idempotente. Retorna nº de canais colapsados.
     function dedupSelfLive(list) {
         if (!Array.isArray(list) || list.length < 2) return 0;
         const score = (it) => {
             const n = String(it.name || '');
+            const qr = qualityRank(n);
             const clean = /\b(1080p|720p|2160p|4k|fhd|hdrip|hd|sd|h264|h265|hevc|web-?dl)\b/i.test(n) ? 0 : 3;
-            return clean + (it.stream_icon ? 1 : 0) + (it.epg_channel_id ? 1 : 0);
+            return qr * 5 + clean + (it.stream_icon ? 1 : 0) + (it.epg_channel_id ? 1 : 0);
         };
         const buckets = new Map();
         list.forEach((it, i) => {
@@ -232,10 +242,26 @@ window.Providers = (function () {
             for (let j = 1; j < arr.length; j++) {
                 const loser = list[arr[j]];
                 if (!win._alts) win._alts = [];
+                if (!win._altItems) win._altItems = [];
                 const id = loser.stream_id != null ? loser.stream_id : loser.series_id;
                 if (id != null && win._alts.indexOf(id) < 0) win._alts.push(id);
+                if (id != null) {
+                    const altItem = {
+                        stream_id: id,
+                        name: loser.name || loser.title,
+                        stream_icon: loser.stream_icon,
+                        epg_channel_id: loser.epg_channel_id,
+                        provider: loser.provider
+                    };
+                    if (win._altItems.findIndex(x => x.stream_id === id) < 0) win._altItems.push(altItem);
+                }
                 if (Array.isArray(loser._alts)) {
                     for (const x of loser._alts) if (win._alts.indexOf(x) < 0) win._alts.push(x);
+                }
+                if (Array.isArray(loser._altItems)) {
+                    for (const x of loser._altItems) {
+                        if (win._altItems.findIndex(y => y.stream_id === x.stream_id) < 0) win._altItems.push(x);
+                    }
                 }
                 drop.add(arr[j]);
             }
@@ -290,7 +316,17 @@ window.Providers = (function () {
                 }
                 if (dup) {
                     if (!dup._alts) dup._alts = [];
+                    if (!dup._altItems) dup._altItems = [];
                     dup._alts.push(extra.stream_id); // id namespaced, já jogável
+                    // armazena objeto completo p/ UI de troca de qualidade/provedor
+                    const altItem = {
+                        stream_id: extra.stream_id,
+                        name: extra.name || extra.title,
+                        stream_icon: extra.stream_icon,
+                        epg_channel_id: extra.epg_channel_id,
+                        provider: extra.provider
+                    };
+                    if (dup._altItems.findIndex(x => x.stream_id === extra.stream_id) < 0) dup._altItems.push(altItem);
                     // F6: mesma obra em OUTRA variante de idioma vira também
                     // "_versions" (objeto completo, tocável pelo seletor do
                     // detail) — só quando o alvo é visível; alvo oculto fica

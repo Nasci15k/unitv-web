@@ -436,6 +436,8 @@ html,body{height:100%;font-family:var(--font);background:var(--bg-0);color:var(-
 .settings-option-row{display:flex;align-items:center;gap:10px;justify-content:center}
 .sub-delay-value{font-size:13px;font-weight:700;color:var(--text-1);min-width:48px;text-align:center;font-variant-numeric:tabular-nums}
 #subtitle-size-options .settings-option.active,#subtitle-style-options .settings-option.active{border-color:var(--accent);color:var(--accent-soft)}
+.variant-provider{font-size:10px;color:var(--text-3);background:var(--surface);padding:2px 6px;border-radius:4px;margin-left:auto}
+.settings-option-title{font-size:10px;text-transform:uppercase;color:var(--text-3);font-weight:800;letter-spacing:.9px;margin:12px 0 6px;display:block}
 
 /* ============ LOADING & STATES ============ */
 .loading-overlay{position:fixed;inset:0;background:rgba(10,10,12,.88);backdrop-filter:blur(12px);z-index:2000;display:flex;align-items:center;justify-content:center}
