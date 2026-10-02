@@ -455,6 +455,9 @@ html,body{height:100%;font-family:var(--font);background:var(--bg-0);color:var(-
     object-position: center;
     border-radius: 4px;
     flex-shrink: 0;
+    /* Zoom 3x para cortar espaço transparente da imagem original */
+    transform: scale(3);
+    transform-origin: center;
 }
 
 .auth-gate-brand-img {
