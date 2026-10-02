@@ -573,7 +573,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 userDisplay.textContent = contaEmail;
                 showLoading('Carregando conteudo...');
                 await loadAllData();
-                showToast('Bem-vindo ao ICN Tv!', 'success');
+                showToast('Bem-vindo ao ICN Player Tv!', 'success');
                 applyConsoleGuard();
                 startNotificationPolling();
                 startInstallPrompt();
@@ -768,7 +768,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const apk = (window.OPENTV_CONFIG && OPENTV_CONFIG.APK_URL) || '';
             ov.innerHTML = '<div class="modal-box" style="max-width:400px;padding:28px;text-align:center">' +
                 '<i class="fab fa-android" style="font-size:40px;color:var(--accent);margin-bottom:14px"></i>' +
-                '<div style="font-size:18px;font-weight:800;margin-bottom:8px">Instalar o app ICN Tv</div>' +
+                '<div style="font-size:18px;font-weight:800;margin-bottom:8px">Instalar o app ICN Player Tv</div>' +
                 '<div style="font-size:13px;color:var(--text-2);line-height:1.6;margin-bottom:20px">Instale no seu aparelho e assista como num app de verdade — tela cheia, ícone na home, mais rápido.</div>' +
                 (deferredInstall ? '<button class="btn-watch primary" style="width:100%;justify-content:center;margin-bottom:10px" id="btn-install-pwa"><i class="fas fa-download"></i> Instalar app</button>' : '') +
                 (apk ? '<a class="btn-watch secondary" style="width:100%;justify-content:center;margin-bottom:10px" href="' + apk + '" id="btn-install-apk"><i class="fas fa-file-arrow-down"></i> Baixar APK</a>' : '') +
