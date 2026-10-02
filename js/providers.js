@@ -202,6 +202,52 @@ window.Providers = (function () {
         return drop.size;
     }
 
+    // Canais extremamente idênticos (mesma estação com variação de
+    // qualidade/codec no nome: "Globo HD" x "Globo H265" x "Globo 4K").
+    // normName já remove qualidade/colchetes → mesma chave = mesma estação.
+    // Vencedor = nome mais limpo + logo + EPG (melhor exibição); perdedores
+    // viram _alts (URLs preservadas p/ failover futuro). Pôster NÃO decide
+    // aqui: a mesma estação legítima tem logos diferentes por fonte.
+    // Idempotente. Retorna nº de canais colapsados.
+    function dedupSelfLive(list) {
+        if (!Array.isArray(list) || list.length < 2) return 0;
+        const score = (it) => {
+            const n = String(it.name || '');
+            const clean = /\b(1080p|720p|2160p|4k|fhd|hdrip|hd|sd|h264|h265|hevc|web-?dl)\b/i.test(n) ? 0 : 3;
+            return clean + (it.stream_icon ? 1 : 0) + (it.epg_channel_id ? 1 : 0);
+        };
+        const buckets = new Map();
+        list.forEach((it, i) => {
+            if (!it) return;
+            const k = CL.normName(it.name || it.title);
+            if (!k) return;
+            if (!buckets.has(k)) buckets.set(k, []);
+            buckets.get(k).push(i);
+        });
+        const drop = new Set();
+        for (const arr of buckets.values()) {
+            if (arr.length < 2) continue;
+            arr.sort((a, b) => score(list[b]) - score(list[a]));
+            const win = list[arr[0]];
+            for (let j = 1; j < arr.length; j++) {
+                const loser = list[arr[j]];
+                if (!win._alts) win._alts = [];
+                const id = loser.stream_id != null ? loser.stream_id : loser.series_id;
+                if (id != null && win._alts.indexOf(id) < 0) win._alts.push(id);
+                if (Array.isArray(loser._alts)) {
+                    for (const x of loser._alts) if (win._alts.indexOf(x) < 0) win._alts.push(x);
+                }
+                drop.add(arr[j]);
+            }
+        }
+        if (!drop.size) return 0;
+        const out = [];
+        for (let i = 0; i < list.length; i++) if (!drop.has(i)) out.push(list[i]);
+        list.length = 0;
+        for (const it of out) list.push(it);
+        return drop.size;
+    }
+
     // ---------- merge ----------
     // state.all* já contêm o catálogo do provedor padrão (caminho legado).
     // loaded = resultados de fetchCatalogs() por pack.
@@ -310,6 +356,7 @@ window.Providers = (function () {
         // F10: limpa idênticos internos ANTES do merge (base e cada pack)
         const removedMovies = dedupSelf(state.allMovies) + dedupSelf(newMovies);
         const removedSeries = dedupSelf(state.allSeries) + dedupSelf(newSeries);
+        const removedLive = dedupSelfLive(state.allLive) + dedupSelfLive(newLive);
 
         const rm = mergeList(state.allMovies, newMovies, false);
         const rs = mergeList(state.allSeries, newSeries, false);
@@ -333,7 +380,7 @@ window.Providers = (function () {
 
         logDebug('[providers] merge ok | +', rm.keep.length, 'filmes,', '+', rs.keep.length, 'series,', '+', rl.keep.length, 'canais',
             '| dedup -', rm.dups, 'filmes, -', rs.dups, 'series, -', rl.dups, 'canais',
-            '| F10 internos -', removedMovies, 'filmes, -', removedSeries, 'series');
+            '| F10 internos -', removedMovies, 'filmes, -', removedSeries, 'series, -', removedLive, 'canais');
         return true;
     }
 
@@ -405,6 +452,7 @@ window.Providers = (function () {
         mergeInto,
         groupVersions,
         dedupSelf,
+        dedupSelfLive,
         clearLocalCache
     };
 })();

@@ -65,7 +65,8 @@
     }
 
     // Camadas de prova (exige mesmo título normalizado antes de tudo):
-    // 1) anos conflitantes (Δ>1)  → OBRAS DIFERENTES (Mortal Kombat 1995/2021);
+    // 1) anos conflitantes (Δ>1)  → OBRAS DIFERENTES (Mortal Kombat 1995/2021),
+    //    exceto com pôster IDÊNTICO e distintivo → mesma obra (ano errado na base);
     // 2) mesmo pôster             → mesma obra;
     // 3) anos compatíveis         → mesma obra;
     // 4) um sabe o ano e o outro não → mesma obra (relançamento típico de
@@ -78,9 +79,14 @@
         if (!na || !nb || na !== nb) return false;
         const ya = extractYear(a);
         const yb = extractYear(b);
-        if (ya && yb && Math.abs(ya - yb) > 1) return false;
         const pa = normPoster(a.movie_image || a.cover || a.stream_icon);
         const pb = normPoster(b.movie_image || b.cover || b.stream_icon);
+        if (ya && yb && Math.abs(ya - yb) > 1) {
+            // mesmo arquivo de imagem longo (TMDB/CDN) + nome igual = mesma
+            // obra com metadado de ano divergente — não deixa o ano falso
+            // separar o que é extremamente idêntico.
+            if (!(pa && pb && pa === pb && pa.length >= 35)) return false;
+        }
         if (pa && pb && pa === pb) return true;
         if (ya && yb) return true;
         if (ya || yb) return true; // um sabe o ano, outro não → mesmo título
@@ -88,6 +94,25 @@
         const rb = ratingOf(b);
         if (ra && rb && Math.abs(ra - rb) <= 0.2) return true;
         return false;
+    }
+
+    // Nome LIMPO para exibição: remove tags de idioma/legenda do título
+    // ("[L]", "[DUB]", "(Legendado)", " - Dublado"…) sem tocar na lógica de
+    // dedup/variantes que depende do nome cru. Guardas de lookahead impedem
+    // falso positivo tipo "Palavra (En)Cantada".
+    function displayName(s) {
+        const raw = String(s == null ? '' : s);
+        if (!raw) return raw;
+        const out = raw
+            // tag no INÍCIO do nome: sai sempre (fonte prefixa "[L]Nome")
+            .replace(/^\s*\[(?:L|LEG|DUB|D|PT|EN|MULTI|DUAL|OV)\]\s*/giu, ' ')
+            // tag no meio/fim: lookahead evita false positive tipo "[L]egacy"
+            .replace(/\s*\[(?:L|LEG|DUB|D|PT|EN|MULTI|DUAL|OV)\](?![\p{L}\p{N}])/giu, ' ')
+            .replace(/\s*[[(]\s*(?:dublado|dublada|dub|legendado|legendada|multi[\s-]?audio|dual[\s-]?audio|en|pt|original)\s*[)\]](?![\p{L}\p{N}])/giu, ' ')
+            .replace(/\s*[-–—|,:]\s*(?:dublado|dublada|legendado|legendada)\b/giu, ' ')
+            .replace(/\s{2,}/g, ' ')
+            .trim();
+        return out || raw;
     }
 
     // ---------- variantes de idioma (F6) ----------
@@ -273,6 +298,7 @@
         ratingOf,
         isSameWork,
         detectLanguage,
+        displayName,
         variantKey,
         LANG_RANK,
         langRank,

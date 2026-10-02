@@ -101,7 +101,7 @@ html,body{height:100%;font-family:var(--font);background:var(--bg-0);color:var(-
 #hero-banner{margin-bottom:32px;border-radius:var(--radius-lg);overflow:hidden}
 .hero-banner-inner{position:relative;height:430px;border-radius:var(--radius-lg);overflow:hidden;cursor:pointer}
 .hero-banner-inner:hover .hero-bg{transform:scale(1.03)}
-.hero-bg{position:absolute;inset:0;background-size:cover;background-position:center 18%;transition:transform .6s ease}
+.hero-bg{position:absolute;inset:0;background-color:#14141a;background-image:linear-gradient(135deg,#1c1c24 0%,#101014 70%);background-size:cover;background-position:center 18%;transition:transform .6s ease}
 .hero-bg::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,rgba(15,15,17,.94) 0%,rgba(15,15,17,.6) 45%,transparent 72%),linear-gradient(0deg,rgba(15,15,17,.9) 5%,transparent 55%)}
 .hero-content{position:relative;z-index:2;padding:44px 48px;height:100%;display:flex;flex-direction:column;justify-content:flex-end;max-width:620px}
 .hero-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;background:var(--accent);color:#fff;font-size:10px;font-weight:800;text-transform:uppercase;border-radius:4px;letter-spacing:1.2px;margin-bottom:14px;align-self:flex-start}
@@ -668,3 +668,32 @@ html,body{height:100%;font-family:var(--font);background:var(--bg-0);color:var(-
 
 /* ============ FOCO TV (controle remoto) ============ */
 .tv-focus{outline:3px solid var(--accent)!important;outline-offset:2px;border-radius:10px;box-shadow:0 0 18px rgba(229,9,20,.45)!important;transform:scale(1.04);z-index:5}
+.tv-mode .tv-focus{outline-width:4px;box-shadow:0 0 26px rgba(229,9,20,.6)!important;transform:scale(1.07)}
+.tv-mode .tv-focus.tv-card{transform:translateY(-4px) scale(1.05)}
+.tv-mode .content-card.tv-focus,.tv-mode .channel-card.tv-focus{transform:translateY(-4px) scale(1.05)}
+
+/* ============ Scroll horizontal (PC): arrasto com mouse ============ */
+.hscroll-dragging{cursor:grabbing;user-select:none}
+.hscroll-dragging *{user-select:none!important;cursor:grabbing!important}
+
+/* ============ Mobile: alvos de toque maiores + momentum ============ */
+@media(max-width:768px){
+  .filter-mode,.btn-open-filter{min-height:38px}
+  .filter-pill{min-height:38px;display:inline-flex;align-items:center}
+  .card-fav{width:36px;height:36px}
+  .btn-menu{min-width:38px;min-height:38px}
+  .btn-search-go{min-width:38px;min-height:38px}
+  #live-categories .live-category-btn{min-height:38px}
+  #live-categories,.row-scroll,.filter-mode-bar,.filter-pills,.seasons-pills{-webkit-overflow-scrolling:touch}
+}
+
+/* ============ POLISH VISUAL (redesign) ============ */
+.content-area{background:
+  radial-gradient(860px 400px at 86% -6%, rgba(229,9,20,.055), transparent 62%),
+  radial-gradient(760px 520px at -6% 4%, rgba(70,60,140,.05), transparent 60%),
+  var(--bg-0)}
+.sidebar::after{content:'';position:absolute;left:0;right:0;bottom:-1px;height:1px;background:linear-gradient(90deg,transparent 6%,rgba(229,9,20,.45) 34%,rgba(229,9,20,.1) 62%,transparent 94%);opacity:.55;pointer-events:none}
+.search-bar input:hover{border-color:var(--border-hover)}
+.search-bar input:focus{border-color:rgba(229,9,20,.55);box-shadow:0 0 0 3px rgba(229,9,20,.14)}
+.content-card:hover{box-shadow:0 20px 46px rgba(0,0,0,.55),0 0 34px rgba(229,9,20,.1)}
+

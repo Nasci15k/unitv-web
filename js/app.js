@@ -1558,7 +1558,7 @@ document.addEventListener('DOMContentLoaded', () => {
             let meta = '';
             if (featured.year) meta += '<span class="meta-badge"><i class="fas fa-calendar"></i> ' + esc(featured.year) + '</span>';
             if (featured.rating) meta += '<span class="meta-badge"><i class="fas fa-star" style="color:var(--warning)"></i> ' + esc(String(featured.rating)) + '</span>';
-            $('hero-banner').innerHTML = '<div class="hero-banner-inner"><div class="hero-bg" style="background-image:url(\'' + safeImg(featured.stream_icon || '') + '\')"></div><div class="hero-content"><div class="hero-badge">FILME</div><h2>' + esc(featured.name) + '</h2>' + (meta ? '<div class="hero-meta">' + meta + '</div>' : '') + '<div class="hero-actions"><button class="btn-hero primary" id="hero-play"><i class="fas fa-play"></i> Assistir</button><button class="btn-hero secondary" id="hero-info"><i class="fas fa-info-circle"></i> Detalhes</button></div></div></div>';
+            $('hero-banner').innerHTML = '<div class="hero-banner-inner"><div class="hero-bg" style="background-image:url(\'' + safeImg(featured.stream_icon || '') + '\')"></div><div class="hero-content"><div class="hero-badge">FILME</div><h2>' + esc(window.CatalogLib ? CatalogLib.displayName(featured.name) : featured.name) + '</h2>' + (meta ? '<div class="hero-meta">' + meta + '</div>' : '') + '<div class="hero-actions"><button class="btn-hero primary" id="hero-play"><i class="fas fa-play"></i> Assistir</button><button class="btn-hero secondary" id="hero-info"><i class="fas fa-info-circle"></i> Detalhes</button></div></div></div>';
             $('hero-play')?.addEventListener('click', () => playItem('movie', featured.stream_id, featured.name));
             $('hero-info')?.addEventListener('click', () => showMovieDetail(featured));
         }
@@ -2043,7 +2043,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const srvSt = state.serverStatus.size ? state.serverStatus.get(String(stream.stream_id)) : null;
         const dotCls = srvSt === 'online' ? 'online' : srvSt === 'offline' ? 'offline' : (hasIcon ? 'warning' : 'warning');
         const dotTitle = srvSt === 'online' ? 'No ar' : srvSt === 'offline' ? 'Fora do ar' : 'Verificando...';
-        card.innerHTML = '<span class="ch-number">#' + num + '</span><img class="ch-logo" src="' + logoSrc + '" loading="lazy" decoding="async" referrerpolicy="no-referrer" alt="" onerror="this.onerror=null;this.src=\'assets/images/placeholder.svg\'"><div class="ch-info"><div class="ch-name">' + esc(stream.name) + '</div><div class="ch-category">' + esc(cat) + '<span class="ch-epg-mini" data-epg-for="' + stream.stream_id + '"></span></div></div><button class="ch-guide" title="Programação"><i class="fas fa-list-ul"></i></button><div class="ch-status-dot ' + dotCls + '" title="' + dotTitle + '"></div>';
+        card.innerHTML = '<span class="ch-number">#' + num + '</span><img class="ch-logo" src="' + logoSrc + '" loading="lazy" decoding="async" referrerpolicy="no-referrer" alt="" onerror="this.onerror=null;this.src=\'assets/images/placeholder.svg\'"><div class="ch-info"><div class="ch-name">' + esc(window.CatalogLib ? CatalogLib.displayName(stream.name) : stream.name) + '</div><div class="ch-category">' + esc(cat) + '<span class="ch-epg-mini" data-epg-for="' + stream.stream_id + '"></span></div></div><button class="ch-guide" title="Programação"><i class="fas fa-list-ul"></i></button><div class="ch-status-dot ' + dotCls + '" title="' + dotTitle + '"></div>';
         card.addEventListener('click', () => {
             const play = () => {
                 WatchStore.record('live', stream.stream_id, stream.name);
@@ -2143,7 +2143,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const rt = rating10(item);
         const posterSrc = safeImg(img);
-        card.innerHTML = badge + qBadge + favBtn + '<img class="poster-img" src="' + posterSrc + '" loading="lazy" decoding="async" referrerpolicy="no-referrer" alt="" onerror="this.onerror=null;this.src=\'assets/images/placeholder.svg\'">' + progBar + '<div class="card-body"><div class="card-title">' + esc(title) + '</div>' + (rt || (item.year && String(item.year) !== '0') ? '<div class="card-meta">' + (rt ? '<span class="rating"><i class="fas fa-star"></i> ' + rt.toFixed(1) + '</span>' : '') + (item.year && String(item.year) !== '0' ? '<span class="year">' + esc(item.year) + '</span>' : '') + '</div>' : '') + '</div>';
+        card.innerHTML = badge + qBadge + favBtn + '<img class="poster-img" src="' + posterSrc + '" loading="lazy" decoding="async" referrerpolicy="no-referrer" alt="" onerror="this.onerror=null;this.src=\'assets/images/placeholder.svg\'">' + progBar + '<div class="card-body"><div class="card-title">' + esc(window.CatalogLib ? CatalogLib.displayName(title) : title) + '</div>' + (rt || (item.year && String(item.year) !== '0') ? '<div class="card-meta">' + (rt ? '<span class="rating"><i class="fas fa-star"></i> ' + rt.toFixed(1) + '</span>' : '') + (item.year && String(item.year) !== '0' ? '<span class="year">' + esc(item.year) + '</span>' : '') + '</div>' : '') + '</div>';
         card.querySelector('.card-fav')?.addEventListener('click', (e) => {
             e.stopPropagation();
             FavoriteStore.toggle(type, id);
@@ -2186,7 +2186,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (section) section.classList.remove('hidden');
         c.innerHTML = items.map(it => {
             const pct = it.progress.totalDuration > 0 ? Math.min(100, (it.progress.lastWatchedPosition / it.progress.totalDuration) * 100) : 0;
-            return '<div class="continue-card" data-type="' + it.type + '" data-id="' + it.streamId + '"><div class="continue-thumb"><img src="' + esc(it.icon) + '" alt="" onerror="this.style.display=\'none\'"><div class="continue-play"><i class="fas fa-play"></i></div><div class="continue-progress"><div style="width:' + pct + '%"></div></div></div><div class="continue-title">' + esc(it.title) + '</div></div>';
+            return '<div class="continue-card" data-type="' + it.type + '" data-id="' + it.streamId + '"><div class="continue-thumb"><img src="' + esc(it.icon) + '" alt="" onerror="this.style.display=\'none\'"><div class="continue-play"><i class="fas fa-play"></i></div><div class="continue-progress"><div style="width:' + pct + '%"></div></div></div><div class="continue-title">' + esc(window.CatalogLib ? CatalogLib.displayName(it.title) : it.title) + '</div></div>';
         }).join('');
         c.querySelectorAll('.continue-card').forEach(el => {
             el.addEventListener('click', () => {
@@ -2210,7 +2210,7 @@ document.addEventListener('DOMContentLoaded', () => {
             '<div class="detail-hero-body">' +
             (poster ? '<img class="detail-hero-poster" src="' + safeImg(poster) + '" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display=\'none\'" alt="">' : '') +
             '<div class="detail-hero-info">' +
-            '<h2>' + esc(title) + '</h2>' +
+            '<h2>' + esc(window.CatalogLib ? CatalogLib.displayName(title) : title) + '</h2>' +
             '<div class="detail-meta">' + metaHtml + '</div>' +
             '<div class="detail-actions">' + actionsHtml + '</div>' +
             '</div></div></div>';
@@ -3121,5 +3121,66 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    // ===== Scroll horizontal confortável (PC): roda do mouse e arrasto =====
+    // Barras horizontais (pills, modos, rows, categorias) respondem à roda
+    // vertical quando o mouse está sobre elas; mouse também arrasta como touch.
+    let hscrollInit = false;
+    const HSCROLL_SEL = '.filter-pills, .filter-mode-bar, .row-scroll, #live-categories, .nav-menu, .seasons-pills, .fav-tabs';
+    function nearestHScroller(t) {
+        let el = t;
+        while (el && el !== document.body) {
+            if (el.scrollWidth > el.clientWidth + 4 && el.matches && el.matches(HSCROLL_SEL)) return el;
+            el = el.parentElement;
+        }
+        return null;
+    }
+    function initHScrollUX() {
+        if (hscrollInit) return;
+        hscrollInit = true;
+        document.addEventListener('wheel', (e) => {
+            if (e.ctrlKey || e.defaultPrevented) return;
+            const el = nearestHScroller(e.target);
+            if (!el) return;
+            const mult = e.deltaMode === 1 ? 24 : (e.deltaMode === 2 ? el.clientHeight : 1);
+            const dy = e.deltaY * mult, dx = e.deltaX * mult;
+            if (dx !== 0 && Math.abs(dx) >= Math.abs(dy)) return; // trackpad já rola na horizontal
+            if (!dy) return;
+            const before = el.scrollLeft;
+            el.scrollLeft = before + dy;
+            if (el.scrollLeft !== before) e.preventDefault(); // na borda, deixa a página rolar normal
+        }, { passive: false });
+
+        let drag = null, suppressClick = false;
+        document.addEventListener('pointerdown', (e) => {
+            suppressClick = false;
+            if (e.pointerType !== 'mouse' || e.button !== 0) { drag = null; return; }
+            const el = nearestHScroller(e.target);
+            drag = el ? { el: el, x: e.clientX, y: e.clientY, left: el.scrollLeft, moved: false } : null;
+        });
+        document.addEventListener('pointermove', (e) => {
+            if (!drag) return;
+            const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+            if (!drag.moved) {
+                if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) { drag = null; return; } // rolagem vertical normal
+                if (Math.abs(dx) <= 6) return;
+                drag.moved = true;
+                document.body.classList.add('hscroll-dragging');
+            }
+            drag.el.scrollLeft = drag.left - dx;
+            e.preventDefault();
+        });
+        const endDrag = () => {
+            if (drag && drag.moved) { suppressClick = true; setTimeout(() => { suppressClick = false; }, 80); }
+            drag = null;
+            document.body.classList.remove('hscroll-dragging');
+        };
+        document.addEventListener('pointerup', endDrag);
+        document.addEventListener('pointercancel', endDrag);
+        document.addEventListener('click', (e) => {
+            if (suppressClick) { e.stopPropagation(); e.preventDefault(); suppressClick = false; }
+        }, true);
+    }
+
     bootApp();
+    initHScrollUX();
 });
