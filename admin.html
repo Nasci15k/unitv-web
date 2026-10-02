@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="supabase-url" content="https://figvurwbnocrzoupvtgs.supabase.co">
     <meta name="supabase-anon" content="sb_publishable_MRl6mB27qtXrDMyF9obwUg_vYtSNh7f">
-    <title>Painel ADM — OpenTv</title>
+    <title>Painel ADM — OpenTv | ICN Group</title>
     <link rel="icon" type="image/svg+xml" href="/assets/images/icon.svg">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
@@ -18,6 +18,7 @@
         .adm-head{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:24px;flex-wrap:wrap}
         .adm-logo{font-size:22px;font-weight:900;letter-spacing:-.6px}
         .adm-logo span{color:var(--accent)}
+        .adm-brand{font-size:9px;text-transform:uppercase;letter-spacing:1.2px;color:var(--accent-soft);font-weight:800;opacity:.7;margin-top:2px}
         .adm-head-btns{display:flex;gap:9px}
         .adm-tabs{display:flex;gap:6px;margin-bottom:24px;flex-wrap:wrap}
         .adm-tab{padding:10px 20px;background:var(--bg-2);border:1px solid var(--border);color:var(--t2);border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;transition:var(--tr);font-family:var(--font)}
@@ -84,6 +85,7 @@
 <body>
     <div id="gate" class="gate"><div>
         <div class="adm-logo">Open<span>Tv</span> — Painel</div>
+                <div class="adm-brand">ICN Group</div>
         <p style="color:var(--t3);font-size:13px;margin:10px 0 18px">Verificando acesso de administrador…</p>
         <a href="login.html?next=admin.html" style="color:var(--accent);font-size:13px">Entrar</a>
     </div></div>
@@ -91,6 +93,7 @@
     <div id="adm" class="hidden">
         <div class="adm-head">
             <div class="adm-logo">Open<span>Tv</span> <span style="font-size:12px;color:var(--t3);font-weight:600">— Painel Administrativo</span></div>
+                <div class="adm-brand">ICN Group</div>
             <div class="adm-head-btns">
                 <button class="btn btn-neu" onclick="location.href='index.html'"><i class="fas fa-play"></i> Player</button>
                 <button class="btn btn-rej" id="btn-adm-logout"><i class="fas fa-sign-out-alt"></i> Sair</button>

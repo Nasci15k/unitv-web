@@ -439,6 +439,16 @@ html,body{height:100%;font-family:var(--font);background:var(--bg-0);color:var(-
 .variant-provider{font-size:10px;color:var(--text-3);background:var(--surface);padding:2px 6px;border-radius:4px;margin-left:auto}
 .settings-option-title{font-size:10px;text-transform:uppercase;color:var(--text-3);font-weight:800;letter-spacing:.9px;margin:12px 0 6px;display:block}
 
+/* ICN Group branding */
+.auth-gate-brand,.sidebar-brand,.adm-brand,.lp-brand,.login-brand,.plans-brand{font-size:10px;text-transform:uppercase;letter-spacing:1.2px;color:var(--accent-soft);font-weight:800;opacity:.9}
+.auth-gate-brand{margin-top:4px;text-align:center}
+.sidebar-brand{margin-left:10px;padding-left:10px;border-left:1px solid rgba(255,255,255,.15);font-size:9px}
+.adm-brand{margin-top:2px;font-size:9px;opacity:.7}
+.lp-brand{margin-top:4px;font-size:11px}
+.login-brand{display:block;margin-top:6px;font-size:10px;text-align:center}
+.plans-brand{margin-top:4px;font-size:11px;text-align:center}
+.brand-tag{font-size:11px;color:var(--accent-soft);font-weight:700;vertical-align:middle}
+
 /* ============ LOADING & STATES ============ */
 .loading-overlay{position:fixed;inset:0;background:rgba(10,10,12,.88);backdrop-filter:blur(12px);z-index:2000;display:flex;align-items:center;justify-content:center}
 .loading-content{text-align:center}
